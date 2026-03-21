@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}JobBot{% endblock %} – Randy Walker</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="nav-brand">
+      <span class="bot-icon">🤖</span>
+      <span>JobBot</span>
+      <span class="nav-subtitle">Randy Walker</span>
+    </div>
+    <div class="nav-links">
+      <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint=='dashboard' %}active{% endif %}">Dashboard</a>
+      <a href="{{ url_for('jobs') }}" class="nav-link {% if request.endpoint=='jobs' %}active{% endif %}">Jobs</a>
+      <a href="{{ url_for('search') }}" class="nav-link {% if request.endpoint=='search' %}active{% endif %}">Search</a>
+      <a href="{{ url_for('add_url') }}" class="nav-link {% if request.endpoint=='add_url' %}active{% endif %}">Add URL</a>
+      <a href="{{ url_for('answer') }}" class="nav-link {% if request.endpoint=='answer' %}active{% endif %}">Answer</a>
+      <a href="{{ url_for('settings') }}" class="nav-link {% if request.endpoint=='settings' %}active{% endif %}">⚙ Settings</a>
+    </div>
+  </nav>
+
+  <main class="main-content">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+  <script>
+    // Auto-dismiss alerts after 5 seconds
+    setTimeout(() => {
+      document.querySelectorAll('.alert').forEach(a => a.style.display = 'none');
+    }, 5000);
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1>Settings</h1>
+</div>
+
+<!-- Claude Status -->
+<div class="status-banner {% if claude_status.available %}banner-green{% else %}banner-yellow{% endif %}" style="margin-bottom: 20px;">
+  {% if claude_status.available %}
+    ✅ <strong>Claude CLI detected</strong> ({{ claude_status.version }}) – Q&A is fully automated
+  {% else %}
+    ⚠️ <strong>Claude CLI not found</strong> –
+    <a href="https://docs.anthropic.com/en/docs/claude-code" target="_blank">Install Claude Code</a>
+    for full Q&A automation, or enter an Anthropic API key below.
+  {% endif %}
+</div>
+
+<form method="POST">
+  <div class="settings-grid">
+
+    <!-- Job Search -->
+    <div class="card">
+      <h3>Job Search</h3>
+      <div class="form-group">
+        <label>Default Location</label>
+        <input type="text" name="default_location" class="form-control"
+               value="{{ settings.get('default_location', 'Austin, TX') }}">
+      </div>
+      <div class="form-group">
+        <label>Default Job Title Keywords (one per line)</label>
+        <textarea name="default_keywords" rows="8" class="form-control">{{ settings.get('default_keywords_text', 'IT Director\nVP of IT\nHead of Cloud\nDirector of Infrastructure\nCloud Manager\nDirector of Technology\nVP of Technology\nIT Manager\nEngineering Manager') }}</textarea>
+      </div>
+      <div class="form-group">
+        <label>Minimum Match Score (%)</label>
+        <input type="number" name="min_match_score" class="form-control" min="0" max="100"
+               value="{{ settings.get('min_match_score', '50') }}">
+      </div>
+      <div class="form-group">
+        <label>Auto-Search Interval (hours, 0 = off)</label>
+        <input type="number" name="search_interval_hours" class="form-control" min="0"
+               value="{{ settings.get('search_interval_hours', '6') }}">
+      </div>
+      <div class="form-group">
+        <label>
+          <input type="checkbox" name="auto_apply" value="true"
+                 {% if settings.get('auto_apply') == 'true' %}checked{% endif %}>
+          Auto-apply to all matching jobs (no review)
+        </label>
+        <small>⚠️ Use carefully! Enables fully automatic applications without review.</small>
+      </div>
+    </div>
+
+    <!-- Salary -->
+    <div class="card">
+      <h3>Compensation</h3>
+      <div class="form-group">
+        <label>Target Salary ($)</label>
+        <input type="number" name="salary_expectation" class="form-control"
+               value="{{ settings.get('salary_expectation', '180000') }}">
+      </div>
+      <div class="form-group">
+        <label>Minimum Acceptable Salary ($)</label>
+        <input type="number" name="salary_min" class="form-control"
+               value="{{ settings.get('salary_min', '150000') }}">
+      </div>
+    </div>
+
+    <!-- LinkedIn -->
+    <div class="card">
+      <h3>LinkedIn</h3>
+      <div class="form-group">
+        <label>LinkedIn Session Cookie (<code>li_at</code>)</label>
+        <input type="password" name="linkedin_session_cookie" class="form-control"
+               value="{{ settings.get('linkedin_session_cookie', '') }}"
+               placeholder="Get from browser dev tools → Cookies → li_at">
+        <small>Required for LinkedIn job searching. Find it in Chrome DevTools → Application → Cookies → linkedin.com → li_at</small>
+      </div>
+    </div>
+
+    <!-- Claude / AI -->
+    <div class="card">
+      <h3>Claude / AI Settings</h3>
+      <div class="form-group">
+        <label>
+          <input type="checkbox" name="use_claude_cli" value="true"
+                 {% if settings.get('use_claude_cli', 'true') == 'true' %}checked{% endif %}>
+          Use Claude CLI if available (recommended)
+        </label>
+      </div>
+      <div class="form-group">
+        <label>Anthropic API Key (optional)</label>
+        <input type="password" name="anthropic_api_key" class="form-control"
+               value="{{ settings.get('anthropic_api_key', '') }}"
+               placeholder="sk-ant-...">
+        <small>Backup if Claude CLI is not installed. Get at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a></small>
+      </div>
+    </div>
+
+    <!-- Email / Notifications -->
+    <div class="card">
+      <h3>Email &amp; Notifications</h3>
+
+      <div class="form-group">
+        <label>
+          <input type="checkbox" name="email_notifications" value="true"
+                 {% if settings.get('email_notifications', 'true') == 'true' %}checked{% endif %}>
+          Send email notifications
+        </label>
+      </div>
+
+      <div class="quick-presets">
+        <strong>Quick preset:</strong>
+        <button type="button" onclick="applyPreset('outlook')">Outlook/Live</button>
+        <button type="button" onclick="applyPreset('gmail')">Gmail</button>
+      </div>
+
+      <div class="form-group">
+        <label>IMAP Host (for reading job alert emails)</label>
+        <input type="text" name="imap_host" id="imap_host" class="form-control"
+               value="{{ settings.get('imap_host', '') }}" placeholder="outlook.office365.com">
+      </div>
+      <div class="form-group">
+        <label>Email Address</label>
+        <input type="email" name="imap_user" id="imap_user" class="form-control"
+               value="{{ settings.get('imap_user', '') }}" placeholder="randy.walker@live.com">
+      </div>
+      <div class="form-group">
+        <label>Email Password / App Password</label>
+        <input type="password" name="imap_pass" id="imap_pass" class="form-control"
+               value="{{ settings.get('imap_pass', '') }}">
+        <small>Use an <a href="https://support.microsoft.com/en-us/account-billing/how-to-get-and-use-app-passwords-5896ed9b-4263-e681-128a-a6f2979a7944" target="_blank">App Password</a> for Outlook, or enable "Less secure apps" / create App Password for Gmail.</small>
+      </div>
+      <div class="form-group">
+        <label>SMTP Host (for sending notifications)</label>
+        <input type="text" name="smtp_host" id="smtp_host" class="form-control"
+               value="{{ settings.get('smtp_host', '') }}" placeholder="smtp.office365.com">
+      </div>
+      <div class="form-group">
+        <label>SMTP Port</label>
+        <input type="number" name="smtp_port" id="smtp_port" class="form-control"
+               value="{{ settings.get('smtp_port', '587') }}">
+      </div>
+      <div class="form-group">
+        <label>SMTP Username</label>
+        <input type="text" name="smtp_user" id="smtp_user" class="form-control"
+               value="{{ settings.get('smtp_user', '') }}">
+      </div>
+      <div class="form-group">
+        <label>SMTP Password</label>
+        <input type="password" name="smtp_pass" id="smtp_pass" class="form-control"
+               value="{{ settings.get('smtp_pass', '') }}">
+      </div>
+    </div>
+
+  </div><!-- /settings-grid -->
+
+  <div style="margin-top: 20px;">
+    <button type="submit" class="btn btn-primary btn-lg">💾 Save Settings</button>
+  </div>
+</form>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const presets = {
+  outlook: {
+    imap_host: 'outlook.office365.com',
+    smtp_host: 'smtp.office365.com',
+    smtp_port: '587'
+  },
+  gmail: {
+    imap_host: 'imap.gmail.com',
+    smtp_host: 'smtp.gmail.com',
+    smtp_port: '587'
+  }
+};
+
+function applyPreset(name) {
+  const p = presets[name];
+  if (!p) return;
+  document.getElementById('imap_host').value = p.imap_host;
+  document.getElementById('smtp_host').value = p.smtp_host;
+  document.getElementById('smtp_port').value = p.smtp_port;
+}
+</script>
+{% endblock %}

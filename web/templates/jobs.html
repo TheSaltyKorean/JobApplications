@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Jobs{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1>Jobs</h1>
+  <div class="header-actions">
+    <a href="{{ url_for('search') }}" class="btn btn-primary">🔍 New Search</a>
+    <a href="{{ url_for('add_url') }}" class="btn btn-secondary">+ Add URL</a>
+    <button class="btn btn-success" onclick="runQueue()">▶ Apply Queue ({{ stats.queued }})</button>
+  </div>
+</div>
+
+<!-- Filter Tabs -->
+<div class="filter-tabs">
+  <a href="{{ url_for('jobs') }}" class="tab {% if not current_status %}active{% endif %}">All ({{ stats.total }})</a>
+  <a href="{{ url_for('jobs', status='new') }}" class="tab {% if current_status=='new' %}active{% endif %}">New ({{ stats.new }})</a>
+  <a href="{{ url_for('jobs', status='queued') }}" class="tab {% if current_status=='queued' %}active{% endif %}">Queued ({{ stats.queued }})</a>
+  <a href="{{ url_for('jobs', status='applied') }}" class="tab {% if current_status=='applied' %}active{% endif %}">Applied ({{ stats.applied }})</a>
+  <a href="{{ url_for('jobs', status='skipped') }}" class="tab {% if current_status=='skipped' %}active{% endif %}">Skipped ({{ stats.skipped }})</a>
+  <a href="{{ url_for('jobs', status='failed') }}" class="tab {% if current_status=='failed' %}active{% endif %}">Failed ({{ stats.failed }})</a>
+</div>
+
+<div class="card">
+  {% if jobs %}
+    <table class="jobs-table full-table">
+      <thead>
+        <tr>
+          <th>Title</th>
+          <th>Company</th>
+          <th>Location</th>
+          <th>Platform</th>
+          <th>Match</th>
+          <th>Resume</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for job in jobs %}
+        <tr class="{% if job.is_indian_firm %}row-orange{% endif %}">
+          <td>
+            <a href="{{ url_for('job_detail', job_id=job.id) }}">{{ job.title }}</a>
+            {% if job.is_indian_firm %}
+              <span class="badge badge-orange" title="{{ job.flagged_reason }}">🇮🇳</span>
+            {% endif %}
+          </td>
+          <td>{{ job.company }}</td>
+          <td>{{ job.location or '–' }}</td>
+          <td><span class="badge badge-{{ job.platform }}">{{ job.platform or '–' }}</span></td>
+          <td>
+            <span class="match-badge {% if job.match_score >= 70 %}match-high{% elif job.match_score >= 50 %}match-med{% else %}match-low{% endif %}">
+              {{ job.match_score|int }}%
+            </span>
+          </td>
+          <td><span class="badge badge-resume">{{ job.resume_type or '–' }}</span></td>
+          <td><span class="status-badge status-{{ job.status }}">{{ job.status }}</span></td>
+          <td class="action-cell">
+            {% if job.status in ('new', 'failed') %}
+              <form method="POST" action="{{ url_for('queue_job', job_id=job.id) }}" style="display:inline">
+                <button class="btn-sm btn-green">Queue</button>
+              </form>
+              <button class="btn-sm btn-blue" onclick="applyNow({{ job.id }})">Apply Now</button>
+            {% elif job.status == 'queued' %}
+              <button class="btn-sm btn-blue" onclick="applyNow({{ job.id }})">Apply Now</button>
+            {% endif %}
+            {% if job.status not in ('applied',) %}
+              <button class="btn-sm btn-red" onclick="skipJob({{ job.id }})">Skip</button>
+            {% endif %}
+            {% if job.url %}
+              <a href="{{ job.url }}" target="_blank" class="btn-sm btn-gray">View ↗</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <!-- Pagination -->
+    <div class="pagination">
+      {% if page > 1 %}
+        <a href="{{ url_for('jobs', status=current_status, page=page-1) }}" class="btn-sm">← Prev</a>
+      {% endif %}
+      <span>Page {{ page }}</span>
+      {% if jobs|length == 20 %}
+        <a href="{{ url_for('jobs', status=current_status, page=page+1) }}" class="btn-sm">Next →</a>
+      {% endif %}
+    </div>
+
+  {% else %}
+    <p class="empty-state">
+      No jobs found.
+      {% if current_status %}
+        <a href="{{ url_for('jobs') }}">View all jobs</a> or
+      {% endif %}
+      <a href="{{ url_for('search') }}">run a search</a>.
+    </p>
+  {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function applyNow(id) {
+  if (!confirm('Apply to this job now? A browser window will open.')) return;
+  fetch(`/jobs/${id}/apply`, {method: 'POST'})
+    .then(r => r.json())
+    .then(d => { alert(d.message || d.error); setTimeout(() => location.reload(), 2000); });
+}
+function skipJob(id) {
+  if (!confirm('Skip this job?')) return;
+  fetch(`/api/job/${id}/status`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({status: 'skipped'})
+  }).then(() => location.reload());
+}
+function runQueue() {
+  if (!confirm('Apply to all queued jobs now?')) return;
+  fetch('/api/run-queue', {method: 'POST'})
+    .then(r => r.json())
+    .then(d => alert(d.message));
+}
+</script>
+{% endblock %}

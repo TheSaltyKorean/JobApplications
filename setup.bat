@@ -1,4 +1,9 @@
 @echo off
+REM If running from PowerShell, re-launch in cmd.exe to avoid Pester conflicts
+if defined PSModulePath (
+    cmd /c "%~f0" %*
+    exit /b
+)
 echo ============================================
 echo   JobApplicationBot - First-Time Setup
 echo ============================================

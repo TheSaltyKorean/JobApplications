@@ -20,12 +20,13 @@ from src import database as db
 from src import job_analyzer
 from src import notifier
 from src import claude_helper
+from src.job_pipeline import process_job, process_job_batch
 from src.resume_profile import CONTACT
 
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.secret_key = 'jobbot-secret-2025'
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', os.urandom(24).hex())
 
 APP_ROOT = Path(__file__).parent.parent
 
@@ -179,18 +180,7 @@ def add_url():
             from src.job_searcher import fetch_job_from_url
             job_data = _run_async(fetch_job_from_url(url))
             if job_data:
-                analysis = job_analyzer.analyze_job(
-                    job_data['title'],
-                    job_data['company'],
-                    job_data['description'],
-                )
-                job_data.update(analysis)
-                job_data['status'] = 'new'
-                row_id = db.upsert_job(job_data)
-
-                should, reason = job_analyzer.should_apply(analysis)
-                if not should:
-                    db.update_job_status(row_id, 'skipped', reason)
+                process_job(job_data)
 
         threading.Thread(target=fetch_and_add, daemon=True).start()
         flash(f'Job URL submitted for processing: {url}', 'success')
@@ -230,12 +220,10 @@ def search():
                 indeed_jobs = _run_async(search_indeed(keywords, location))
                 all_jobs.extend(indeed_jobs)
 
-            new_count = 0
+            # Fetch full descriptions for jobs that don't have them
             for job_data in all_jobs:
-                if db.is_duplicate(job_data['url']):
+                if db.is_duplicate(job_data.get('url', '')):
                     continue
-
-                # Fetch full description for better matching
                 description = job_data.get('description', '')
                 if not description:
                     if job_data['platform'] == 'linkedin':
@@ -249,22 +237,7 @@ def search():
                         description = _run_async(fetch_indeed_description(job_data['url']))
                     job_data['description'] = description
 
-                analysis = job_analyzer.analyze_job(
-                    job_data['title'],
-                    job_data['company'],
-                    job_data.get('description', ''),
-                )
-                job_data.update(analysis)
-                job_data['status'] = 'new'
-
-                should, reason = job_analyzer.should_apply(analysis)
-                if not should:
-                    job_data['status'] = 'skipped'
-                    job_data['notes'] = reason
-
-                db.upsert_job(job_data)
-                if should:
-                    new_count += 1
+            new_count = process_job_batch(all_jobs)
 
             if new_count > 0:
                 notifier.notify_jobs_found(new_count, ', '.join(platforms))

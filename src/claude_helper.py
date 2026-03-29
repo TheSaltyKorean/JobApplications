@@ -148,7 +148,6 @@ def _ask_via_api(question: str, context: str, api_key: str) -> str:
 # ─────────────────────────────────────────────────────────
 
 _pending_answers: dict = {}   # question_hash → answer (populated when user pastes back)
-_answer_event = asyncio.Event() if asyncio.get_event_loop().is_running() else None
 
 
 def _copy_to_clipboard(text: str):
@@ -236,7 +235,7 @@ async def get_answer(question: str, job_context: str = '',
             logger.info(f"CLI answered: {question[:60]}...")
             return answer
 
-  2 # Method 2: Anthropic API
+    # Method 2: Anthropic API
     api_key = _settings.get('anthropic_api_key', '') or os.environ.get('ANTHROPIC_API_KEY', '')
     if api_key:
         answer = await asyncio.get_event_loop().run_in_executor(

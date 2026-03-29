@@ -71,7 +71,7 @@ def _run_auto_search(settings: dict):
     """Run a scheduled job search."""
     import asyncio
     from src.job_searcher import search_linkedin, search_indeed
-    from src import job_analyzer
+    from src.job_pipeline import process_job_batch
 
     keywords = settings.get('default_keywords', [
         'IT Director', 'VP of IT', 'Head of Cloud',
@@ -94,21 +94,7 @@ def _run_auto_search(settings: dict):
     finally:
         loop.close()
 
-    new_count = 0
-    for job_data in all_jobs:
-        if db.is_duplicate(job_data['url']):
-            continue
-        analysis = job_analyzer.analyze_job(
-            job_data['title'], job_data['company'], job_data.get('description', '')
-        )
-        job_data.update(analysis)
-        should, reason = job_analyzer.should_apply(analysis)
-        job_data['status'] = 'new' if should else 'skipped'
-        if not should:
-            job_data['notes'] = reason
-        db.upsert_job(job_data)
-        if should:
-            new_count += 1
+    new_count = process_job_batch(all_jobs)
 
     if new_count > 0:
         notifier.notify_jobs_found(new_count, 'LinkedIn/Indeed')
@@ -119,7 +105,7 @@ def _email_alert_callback(urls: list):
     """Called when email monitor finds job alert URLs."""
     import asyncio
     from src.job_searcher import fetch_job_from_url
-    from src import job_analyzer
+    from src.job_pipeline import process_job
 
     loop = asyncio.new_event_loop()
     new_count = 0
@@ -131,16 +117,7 @@ def _email_alert_callback(urls: list):
             job_data = loop.run_until_complete(fetch_job_from_url(url))
             if not job_data:
                 continue
-            analysis = job_analyzer.analyze_job(
-                job_data['title'], job_data['company'], job_data.get('description', '')
-            )
-            job_data.update(analysis)
-            should, reason = job_analyzer.should_apply(analysis)
-            job_data['status'] = 'new' if should else 'skipped'
-            if not should:
-                job_data['notes'] = reason
-            db.upsert_job(job_data)
-            if should:
+            if process_job(job_data):
                 new_count += 1
     finally:
         loop.close()

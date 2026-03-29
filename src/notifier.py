@@ -54,12 +54,15 @@ def notify_desktop(title: str, message: str, app_id: str = 'JobApplicationBot'):
     # Fallback: Windows PowerShell balloon
     try:
         import subprocess
+        # Sanitize inputs to prevent PowerShell injection
+        safe_title = title.replace('"', "'").replace('`', '').replace('$', '')[:100]
+        safe_message = message.replace('"', "'").replace('`', '').replace('$', '')[:150]
         ps_script = f'''
         Add-Type -AssemblyName System.Windows.Forms
         $notify = New-Object System.Windows.Forms.NotifyIcon
         $notify.Icon = [System.Drawing.SystemIcons]::Information
         $notify.Visible = $true
-        $notify.ShowBalloonTip(8000, "{title}", "{message[:150]}", [System.Windows.Forms.ToolTipIcon]::Info)
+        $notify.ShowBalloonTip(8000, "{safe_title}", "{safe_message}", [System.Windows.Forms.ToolTipIcon]::Info)
         Start-Sleep -Seconds 9
         $notify.Dispose()
         '''

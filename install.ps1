@@ -3,16 +3,19 @@ Write-Host "  JobApplicationBot - First-Time Setup" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Check Python
-try {
-    $pyVersion = python --version 2>&1
-    Write-Host "[OK] $pyVersion" -ForegroundColor Green
-} catch {
+# Check Python (Windows Store alias returns non-zero and "was not found" text)
+$pyCheck = python --version 2>&1
+if ($LASTEXITCODE -ne 0 -or "$pyCheck" -match "not found|not recognized") {
     Write-Host "ERROR: Python not found." -ForegroundColor Red
-    Write-Host "Please install Python 3.10+ from https://python.org"
+    Write-Host ""
+    Write-Host "Install Python 3.10+ from https://www.python.org/downloads/" -ForegroundColor Yellow
+    Write-Host "IMPORTANT: Check 'Add Python to PATH' during installation!" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "After installing, close and reopen PowerShell, then run .\install.ps1 again."
     Read-Host "Press Enter to exit"
     exit 1
 }
+Write-Host "[OK] $pyCheck" -ForegroundColor Green
 
 # Install pip dependencies
 Write-Host ""

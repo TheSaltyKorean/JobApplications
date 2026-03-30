@@ -1697,6 +1697,35 @@ async def apply_to_job(job: dict, settings: dict) -> dict:
 
         page = await context.new_page()
 
+        # Pre-login to Indeed if we have stored credentials
+        if platform == 'indeed':
+            indeed_creds = ats_credentials.get_credentials('indeed')
+            if indeed_creds and indeed_creds.get('email'):
+                try:
+                    logger.info("Logging into Indeed with stored credentials...")
+                    await page.goto('https://secure.indeed.com/auth', wait_until='domcontentloaded', timeout=20000)
+                    await _async_delay(1, 2)
+                    # Email field
+                    email_input = await page.query_selector('input[name="__email"], input[type="email"], #ifl-InputFormField-3')
+                    if email_input:
+                        await email_input.fill(indeed_creds['email'])
+                        # Submit email
+                        submit_btn = await page.query_selector('button[type="submit"], button:has-text("Continue")')
+                        if submit_btn:
+                            await submit_btn.click()
+                            await _async_delay(2, 3)
+                        # Password field
+                        pw_input = await page.query_selector('input[name="__password"], input[type="password"]')
+                        if pw_input and indeed_creds.get('password'):
+                            await pw_input.fill(indeed_creds['password'])
+                            submit_btn = await page.query_selector('button[type="submit"], button:has-text("Sign in"), button:has-text("Log in")')
+                            if submit_btn:
+                                await submit_btn.click()
+                                await _async_delay(2, 4)
+                                logger.info(f"Indeed login completed, now at: {page.url}")
+                except Exception as e:
+                    logger.warning(f"Indeed pre-login failed (continuing anyway): {e}")
+
         try:
             if platform == 'linkedin':
                 result = await apply_linkedin(page, job, li_cookie)

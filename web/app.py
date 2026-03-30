@@ -195,7 +195,9 @@ def search():
     settings = _load_settings()
 
     if request.method == 'POST':
-        keywords = request.form.getlist('keywords')
+        # Textarea sends one string with newlines — split into individual keywords
+        raw_keywords = request.form.get('keywords', '')
+        keywords = [k.strip() for k in raw_keywords.splitlines() if k.strip()]
         location = request.form.get('location', settings.get('default_location', 'Austin, TX'))
         platforms = request.form.getlist('platforms')
 
@@ -208,17 +210,38 @@ def search():
         def run_search():
             from src.job_searcher import search_linkedin, search_indeed
             all_jobs = []
+            seen_urls = set()
 
-            if 'linkedin' in platforms:
-                li_jobs = _run_async(search_linkedin(
-                    keywords, location,
-                    li_session_cookie=settings.get('linkedin_session_cookie', '')
-                ))
-                all_jobs.extend(li_jobs)
+            # Search each keyword individually to get better results
+            for keyword in keywords:
+                logger.info(f"Searching for: {keyword}")
 
-            if 'indeed' in platforms:
-                indeed_jobs = _run_async(search_indeed(keywords, location))
-                all_jobs.extend(indeed_jobs)
+                if 'linkedin' in platforms:
+                    try:
+                        li_jobs = _run_async(search_linkedin(
+                            [keyword], location,
+                            li_session_cookie=settings.get('linkedin_session_cookie', '')
+                        ))
+                        for job in li_jobs:
+                            if job['url'] not in seen_urls:
+                                seen_urls.add(job['url'])
+                                all_jobs.append(job)
+                        logger.info(f"  LinkedIn '{keyword}': {len(li_jobs)} jobs")
+                    except Exception as e:
+                        logger.error(f"  LinkedIn '{keyword}' failed: {e}")
+
+                if 'indeed' in platforms:
+                    try:
+                        indeed_jobs = _run_async(search_indeed([keyword], location))
+                        for job in indeed_jobs:
+                            if job['url'] not in seen_urls:
+                                seen_urls.add(job['url'])
+                                all_jobs.append(job)
+                        logger.info(f"  Indeed '{keyword}': {len(indeed_jobs)} jobs")
+                    except Exception as e:
+                        logger.error(f"  Indeed '{keyword}' failed: {e}")
+
+            logger.info(f"Total unique jobs found: {len(all_jobs)}")
 
             # Fetch full descriptions for jobs that don't have them
             for job_data in all_jobs:
@@ -226,18 +249,22 @@ def search():
                     continue
                 description = job_data.get('description', '')
                 if not description:
-                    if job_data['platform'] == 'linkedin':
-                        from src.job_searcher import fetch_linkedin_description
-                        description = _run_async(fetch_linkedin_description(
-                            job_data['url'],
-                            settings.get('linkedin_session_cookie', '')
-                        ))
-                    elif job_data['platform'] == 'indeed':
-                        from src.job_searcher import fetch_indeed_description
-                        description = _run_async(fetch_indeed_description(job_data['url']))
-                    job_data['description'] = description
+                    try:
+                        if job_data['platform'] == 'linkedin':
+                            from src.job_searcher import fetch_linkedin_description
+                            description = _run_async(fetch_linkedin_description(
+                                job_data['url'],
+                                settings.get('linkedin_session_cookie', '')
+                            ))
+                        elif job_data['platform'] == 'indeed':
+                            from src.job_searcher import fetch_indeed_description
+                            description = _run_async(fetch_indeed_description(job_data['url']))
+                        job_data['description'] = description
+                    except Exception as e:
+                        logger.error(f"Failed to fetch description for {job_data['url']}: {e}")
 
             new_count = process_job_batch(all_jobs)
+            logger.info(f"Search complete: {len(all_jobs)} total, {new_count} new qualifying jobs")
 
             if new_count > 0:
                 notifier.notify_jobs_found(new_count, ', '.join(platforms))

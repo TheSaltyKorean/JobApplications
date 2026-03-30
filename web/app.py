@@ -545,6 +545,12 @@ def _handle_upload_resume():
     if 'resumes' not in profile or not isinstance(profile['resumes'], dict):
         profile['resumes'] = {}
 
+    # Clean out any entries whose files don't actually exist (template placeholders)
+    profile['resumes'] = {
+        k: v for k, v in profile['resumes'].items()
+        if (APP_ROOT / v).exists()
+    }
+
     rel_path = f'resumes/{safe_name}'
     profile['resumes'][resume_key] = rel_path
 

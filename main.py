@@ -214,12 +214,6 @@ def main():
     flask_thread.start()
     logger.info(f"Dashboard running at http://{FLASK_HOST}:{FLASK_PORT}")
 
-    # Open browser after a short delay
-    def open_browser():
-        time.sleep(1.5)
-        webbrowser.open(f'http://{FLASK_HOST}:{FLASK_PORT}')
-    threading.Thread(target=open_browser, daemon=True).start()
-
     # Show startup notification
     notifier.notify_desktop(
         "JobApplicationBot Started",

@@ -185,6 +185,12 @@ def add_url():
             job_data = _run_async(fetch_job_from_url(url))
             if job_data:
                 process_job(job_data)
+                # Auto-queue manually added URLs — user added it so they want to apply
+                # (override the pipeline's status decision)
+                with db.get_conn() as conn:
+                    row = conn.execute('SELECT id FROM jobs WHERE url=?', (url,)).fetchone()
+                    if row:
+                        db.update_job_status(row['id'], 'queued', 'Manually added via URL')
 
         threading.Thread(target=fetch_and_add, daemon=True).start()
         flash(f'Job URL submitted for processing: {url}', 'success')

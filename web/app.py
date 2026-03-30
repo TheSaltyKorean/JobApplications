@@ -12,6 +12,7 @@ import threading
 from pathlib import Path
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
+from werkzeug.utils import secure_filename
 
 # Add parent to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -484,6 +485,150 @@ def api_resume_routing():
         yaml.dump(profile, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
     return jsonify({'ok': True})
+
+
+@app.route('/api/upload-resume', methods=['POST'])
+def api_upload_resume():
+    """Upload a resume PDF and register it in profile.yaml."""
+    import yaml
+
+    if 'file' not in request.files:
+        return jsonify({'ok': False, 'error': 'No file uploaded'}), 400
+
+    f = request.files['file']
+    if not f.filename:
+        return jsonify({'ok': False, 'error': 'No file selected'}), 400
+
+    # Only accept PDFs
+    if not f.filename.lower().endswith('.pdf'):
+        return jsonify({'ok': False, 'error': 'Only PDF files are accepted'}), 400
+
+    resume_key = request.form.get('key', '').strip()
+    if not resume_key:
+        # Derive key from filename: "Randy-Walker-Cloud.pdf" -> "randy_walker_cloud"
+        resume_key = secure_filename(f.filename).rsplit('.', 1)[0].lower().replace('-', '_').replace(' ', '_')
+
+    # Sanitize key to be YAML-friendly
+    resume_key = resume_key.strip('_').replace('__', '_')
+
+    # Save to resumes/ directory
+    resumes_dir = APP_ROOT / 'resumes'
+    resumes_dir.mkdir(exist_ok=True)
+    safe_name = secure_filename(f.filename)
+    dest = resumes_dir / safe_name
+    f.save(str(dest))
+
+    # Update profile.yaml
+    profile_path = APP_ROOT / 'config' / 'profile.yaml'
+    if not profile_path.exists():
+        # Copy template if profile doesn't exist yet
+        template_path = APP_ROOT / 'config' / 'profile.template.yaml'
+        if template_path.exists():
+            import shutil
+            shutil.copy(template_path, profile_path)
+        else:
+            return jsonify({'ok': False, 'error': 'profile.yaml not found and no template available'}), 500
+
+    with open(profile_path, 'r', encoding='utf-8') as fh:
+        profile = yaml.safe_load(fh) or {}
+
+    if 'resumes' not in profile or not isinstance(profile['resumes'], dict):
+        profile['resumes'] = {}
+
+    rel_path = f'resumes/{safe_name}'
+    profile['resumes'][resume_key] = rel_path
+
+    with open(profile_path, 'w', encoding='utf-8') as fh:
+        yaml.dump(profile, fh, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+    return jsonify({'ok': True, 'key': resume_key, 'path': rel_path, 'filename': safe_name})
+
+
+@app.route('/api/delete-resume', methods=['POST'])
+def api_delete_resume():
+    """Remove a resume key from profile.yaml and optionally delete the file."""
+    import yaml
+
+    data = request.get_json()
+    resume_key = data.get('key', '')
+    delete_file = data.get('delete_file', False)
+
+    if not resume_key:
+        return jsonify({'ok': False, 'error': 'No resume key specified'}), 400
+
+    profile_path = APP_ROOT / 'config' / 'profile.yaml'
+    if not profile_path.exists():
+        return jsonify({'ok': False, 'error': 'profile.yaml not found'}), 404
+
+    with open(profile_path, 'r', encoding='utf-8') as f:
+        profile = yaml.safe_load(f) or {}
+
+    resumes = profile.get('resumes', {})
+    if resume_key not in resumes:
+        return jsonify({'ok': False, 'error': f'Resume key "{resume_key}" not found'}), 404
+
+    file_path = APP_ROOT / resumes[resume_key]
+
+    del resumes[resume_key]
+    profile['resumes'] = resumes
+
+    # Also remove from any routing rules that reference this key
+    routing = profile.get('resume_routing', [])
+    profile['resume_routing'] = [r for r in routing if r.get('resume') != resume_key]
+
+    with open(profile_path, 'w', encoding='utf-8') as f:
+        yaml.dump(profile, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+    if delete_file and file_path.exists():
+        file_path.unlink()
+
+    return jsonify({'ok': True})
+
+
+@app.route('/api/rename-resume', methods=['POST'])
+def api_rename_resume():
+    """Change the key name for a resume in profile.yaml."""
+    import yaml
+
+    data = request.get_json()
+    old_key = data.get('old_key', '')
+    new_key = data.get('new_key', '').strip().lower().replace('-', '_').replace(' ', '_')
+
+    if not old_key or not new_key:
+        return jsonify({'ok': False, 'error': 'Both old and new key required'}), 400
+
+    profile_path = APP_ROOT / 'config' / 'profile.yaml'
+    if not profile_path.exists():
+        return jsonify({'ok': False, 'error': 'profile.yaml not found'}), 404
+
+    with open(profile_path, 'r', encoding='utf-8') as f:
+        profile = yaml.safe_load(f) or {}
+
+    resumes = profile.get('resumes', {})
+    if old_key not in resumes:
+        return jsonify({'ok': False, 'error': f'Resume key "{old_key}" not found'}), 404
+
+    if new_key in resumes and new_key != old_key:
+        return jsonify({'ok': False, 'error': f'Key "{new_key}" already exists'}), 400
+
+    # Preserve order: rebuild dict with new key
+    new_resumes = {}
+    for k, v in resumes.items():
+        if k == old_key:
+            new_resumes[new_key] = v
+        else:
+            new_resumes[k] = v
+    profile['resumes'] = new_resumes
+
+    # Update routing rules that reference the old key
+    for rule in profile.get('resume_routing', []):
+        if rule.get('resume') == old_key:
+            rule['resume'] = new_key
+
+    with open(profile_path, 'w', encoding='utf-8') as f:
+        yaml.dump(profile, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+    return jsonify({'ok': True, 'new_key': new_key})
 
 
 @app.route('/api/notifications')

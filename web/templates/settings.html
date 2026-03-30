@@ -161,28 +161,50 @@
   </div>
 </form>
 
-<!-- Resume Routing -->
+<!-- Resume Management -->
 <div style="margin-top: 32px;">
-  <h2>Resume Routing</h2>
+  <h2>Resumes &amp; Routing</h2>
   <p style="color:#718096; margin-bottom:16px;">
-    Controls which resume is sent for each job. Rules are checked in order &mdash; first match wins.
-    Edit <code>config/profile.yaml</code> to change resume file paths, or adjust title patterns below.
+    Upload your resume PDFs and assign a key name to each. Routing rules below control which resume is sent for each job.
   </p>
 
   <div class="card">
-    <h4>Available Resumes</h4>
-    <table class="jobs-table full-table">
-      <thead><tr><th>Key</th><th>File Path</th></tr></thead>
+    <h4>Your Resumes</h4>
+    <table class="jobs-table full-table" id="resume-table">
+      <thead><tr><th>Key</th><th>File</th><th style="width:140px;">Actions</th></tr></thead>
       <tbody>
         {% for key, path in resume_files.items() %}
-        <tr><td><strong>{{ key }}</strong></td><td style="font-family:monospace;font-size:0.85rem">{{ path }}</td></tr>
+        <tr data-key="{{ key }}">
+          <td><strong class="resume-key-label">{{ key }}</strong></td>
+          <td style="font-family:monospace;font-size:0.85rem">{{ path.split('/')[-1] if '/' in path else path }}</td>
+          <td>
+            <button class="btn-sm btn-blue" onclick="renameResume('{{ key }}')">Rename</button>
+            <button class="btn-sm btn-red" onclick="deleteResume('{{ key }}')">Delete</button>
+          </td>
+        </tr>
         {% endfor %}
       </tbody>
     </table>
+
+    <div style="margin-top:16px; border-top:1px solid #334155; padding-top:16px;">
+      <h4>Upload Resume</h4>
+      <div style="display:flex; gap:8px; align-items:end; flex-wrap:wrap;">
+        <div class="form-group" style="margin:0">
+          <label>Key Name</label>
+          <input type="text" id="upload-key" class="form-control" placeholder="e.g. executive, cloud, contract" style="width:200px;">
+          <small style="color:#718096;">Leave blank to auto-derive from filename</small>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label>PDF File</label>
+          <input type="file" id="upload-file" accept=".pdf" class="form-control" style="width:280px;">
+        </div>
+        <button class="btn btn-primary" onclick="uploadResume()">Upload</button>
+      </div>
+    </div>
   </div>
 
   <div class="card" style="margin-top:16px;">
-    <h4>Routing Rules <small style="color:#718096">(order matters &mdash; first match wins)</small></h4>
+    <h4>Resume Routing Rules <small style="color:#718096">(order matters &mdash; first match wins)</small></h4>
     <div id="routing-rules">
       {% for rule in resume_routing %}
       <div class="routing-rule" style="border:1px solid #334155;border-radius:8px;padding:12px 16px;margin-bottom:10px;background:#1a2332;">
@@ -376,9 +398,144 @@ function addCred() {
   });
 }
 
-// Resume Routing
-const resumeKeys = {{ resume_files.keys() | list | tojson }};
+function editCred(key) {
+  inlinePrompt('Email for ' + key + ':', '').then(email => {
+    if (!email) return;
+    inlinePrompt('Username (if different from email, or leave blank):', '').then(username => {
+      inlinePrompt('Password (leave blank to auto-generate):', '').then(password => {
+        fetch('/api/ats-credentials', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({platform: key, email, username: username || '', password: password || ''})
+        }).then(r => r.json()).then(d => {
+          if (d.ok) location.reload();
+          else showToast(d.error || 'Failed', 'error');
+        });
+      });
+    });
+  });
+}
 
+// ── Resume Upload / Management ──────────────────────────
+let resumeKeys = {{ resume_files.keys() | list | tojson }};
+
+function uploadResume() {
+  const fileInput = document.getElementById('upload-file');
+  const keyInput = document.getElementById('upload-key');
+  if (!fileInput.files.length) {
+    showToast('Select a PDF file first', 'error');
+    return;
+  }
+  const file = fileInput.files[0];
+  if (!file.name.toLowerCase().endsWith('.pdf')) {
+    showToast('Only PDF files are accepted', 'error');
+    return;
+  }
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('key', keyInput.value.trim());
+
+  fetch('/api/upload-resume', { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) {
+        showToast(`Resume "${d.key}" uploaded!`, 'success');
+        // Add row to table
+        const tbody = document.querySelector('#resume-table tbody');
+        const tr = document.createElement('tr');
+        tr.dataset.key = d.key;
+        tr.innerHTML = `
+          <td><strong class="resume-key-label">${d.key}</strong></td>
+          <td style="font-family:monospace;font-size:0.85rem">${d.filename}</td>
+          <td>
+            <button class="btn-sm btn-blue" onclick="renameResume('${d.key}')">Rename</button>
+            <button class="btn-sm btn-red" onclick="deleteResume('${d.key}')">Delete</button>
+          </td>`;
+        tbody.appendChild(tr);
+        // Update resumeKeys for routing dropdowns
+        if (!resumeKeys.includes(d.key)) resumeKeys.push(d.key);
+        refreshRoutingDropdowns();
+        // Reset inputs
+        fileInput.value = '';
+        keyInput.value = '';
+      } else {
+        showToast(d.error || 'Upload failed', 'error');
+      }
+    })
+    .catch(() => showToast('Upload failed', 'error'));
+}
+
+function deleteResume(key) {
+  inlineConfirm(`Delete resume "${key}"? This will also remove it from any routing rules.`).then(yes => {
+    if (!yes) return;
+    inlineConfirm('Also delete the PDF file from disk?').then(deleteFile => {
+      fetch('/api/delete-resume', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({key, delete_file: deleteFile})
+      }).then(r => r.json()).then(d => {
+        if (d.ok) {
+          showToast(`Resume "${key}" removed`, 'success');
+          // Remove table row
+          const row = document.querySelector(`#resume-table tr[data-key="${key}"]`);
+          if (row) row.remove();
+          // Update resumeKeys
+          resumeKeys = resumeKeys.filter(k => k !== key);
+          // Remove any routing rules referencing this key
+          document.querySelectorAll('.routing-rule').forEach(el => {
+            const sel = el.querySelector('.rule-resume');
+            if (sel && sel.value === key) el.remove();
+          });
+          refreshRoutingDropdowns();
+        } else {
+          showToast(d.error || 'Delete failed', 'error');
+        }
+      });
+    });
+  });
+}
+
+function renameResume(key) {
+  inlinePrompt(`New key name for "${key}":`, key).then(newKey => {
+    if (!newKey || newKey === key) return;
+    fetch('/api/rename-resume', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({old_key: key, new_key: newKey})
+    }).then(r => r.json()).then(d => {
+      if (d.ok) {
+        showToast(`Renamed "${key}" to "${d.new_key}"`, 'success');
+        // Update table row
+        const row = document.querySelector(`#resume-table tr[data-key="${key}"]`);
+        if (row) {
+          row.dataset.key = d.new_key;
+          row.querySelector('.resume-key-label').textContent = d.new_key;
+          row.querySelector('.btn-sm.btn-blue').setAttribute('onclick', `renameResume('${d.new_key}')`);
+          row.querySelector('.btn-sm.btn-red').setAttribute('onclick', `deleteResume('${d.new_key}')`);
+        }
+        // Update resumeKeys
+        const idx = resumeKeys.indexOf(key);
+        if (idx !== -1) resumeKeys[idx] = d.new_key;
+        // Update routing dropdowns
+        refreshRoutingDropdowns();
+      } else {
+        showToast(d.error || 'Rename failed', 'error');
+      }
+    });
+  });
+}
+
+function refreshRoutingDropdowns() {
+  // Rebuild <option> lists in all routing rule dropdowns to match current resumeKeys
+  document.querySelectorAll('.rule-resume').forEach(sel => {
+    const current = sel.value;
+    sel.innerHTML = resumeKeys.map(k =>
+      `<option value="${k}" ${k === current ? 'selected' : ''}>${k}</option>`
+    ).join('');
+  });
+}
+
+// ── Resume Routing ──────────────────────────────────────
 function addRoutingRule() {
   const container = document.getElementById('routing-rules');
   const div = document.createElement('div');
@@ -434,24 +591,6 @@ function saveRouting() {
   }).then(r => r.json()).then(d => {
     if (d.ok) showToast('Resume routing saved!', 'success');
     else showToast(d.error || 'Failed to save', 'error');
-  });
-}
-
-function editCred(key) {
-  inlinePrompt('Email for ' + key + ':', '').then(email => {
-    if (!email) return;
-    inlinePrompt('Username (if different from email, or leave blank):', '').then(username => {
-      inlinePrompt('Password (leave blank to auto-generate):', '').then(password => {
-        fetch('/api/ats-credentials', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({platform: key, email, username: username || '', password: password || ''})
-        }).then(r => r.json()).then(d => {
-          if (d.ok) location.reload();
-          else showToast(d.error || 'Failed', 'error');
-        });
-      });
-    });
   });
 }
 </script>

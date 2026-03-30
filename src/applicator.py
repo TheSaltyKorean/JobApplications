@@ -1703,26 +1703,63 @@ async def apply_to_job(job: dict, settings: dict) -> dict:
             if indeed_creds and indeed_creds.get('email'):
                 try:
                     logger.info("Logging into Indeed with stored credentials...")
-                    await page.goto('https://secure.indeed.com/auth', wait_until='domcontentloaded', timeout=20000)
-                    await _async_delay(1, 2)
-                    # Email field
-                    email_input = await page.query_selector('input[name="__email"], input[type="email"], #ifl-InputFormField-3')
+                    # Use the direct email login URL to skip Google/Apple SSO buttons
+                    await page.goto(
+                        'https://secure.indeed.com/auth?hl=en&co=US&continue=https%3A%2F%2Fwww.indeed.com%2F',
+                        wait_until='domcontentloaded', timeout=20000
+                    )
+                    await _async_delay(2, 3)
+
+                    # Look for "Sign in with email" link if SSO buttons are shown first
+                    email_link = await page.query_selector(
+                        'a:has-text("email"), button:has-text("email"), '
+                        'a:has-text("Sign in with email"), a:has-text("Continue with email"), '
+                        '[data-testid="login-with-email"]'
+                    )
+                    if email_link:
+                        await email_link.click()
+                        await _async_delay(1, 2)
+
+                    # Fill email — try multiple selectors Indeed uses
+                    email_input = await page.query_selector(
+                        'input[name="__email"], input[type="email"][name*="email"], '
+                        'input[id*="email"], input[autocomplete="email"]'
+                    )
                     if email_input:
                         await email_input.fill(indeed_creds['email'])
+                        await _async_delay(0.5, 1)
                         # Submit email
-                        submit_btn = await page.query_selector('button[type="submit"], button:has-text("Continue")')
+                        submit_btn = await page.query_selector(
+                            'button[type="submit"]:not([data-testid*="google"]):not([data-testid*="apple"])'
+                        )
                         if submit_btn:
                             await submit_btn.click()
-                            await _async_delay(2, 3)
-                        # Password field
-                        pw_input = await page.query_selector('input[name="__password"], input[type="password"]')
+                            await _async_delay(2, 4)
+
+                        # Wait for password field to appear
+                        try:
+                            await page.wait_for_selector(
+                                'input[type="password"]', timeout=10000
+                            )
+                        except Exception:
+                            pass
+
+                        # Fill password
+                        pw_input = await page.query_selector('input[type="password"]')
                         if pw_input and indeed_creds.get('password'):
                             await pw_input.fill(indeed_creds['password'])
-                            submit_btn = await page.query_selector('button[type="submit"], button:has-text("Sign in"), button:has-text("Log in")')
+                            await _async_delay(0.5, 1)
+                            submit_btn = await page.query_selector(
+                                'button[type="submit"]'
+                            )
                             if submit_btn:
                                 await submit_btn.click()
-                                await _async_delay(2, 4)
+                                await _async_delay(3, 5)
                                 logger.info(f"Indeed login completed, now at: {page.url}")
+                        else:
+                            logger.warning("Indeed password field not found after email submission")
+                    else:
+                        logger.warning("Indeed email input not found on login page")
                 except Exception as e:
                     logger.warning(f"Indeed pre-login failed (continuing anyway): {e}")
 

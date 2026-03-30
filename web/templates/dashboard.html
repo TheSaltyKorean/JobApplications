@@ -125,12 +125,9 @@
 {% block scripts %}
 <script>
 function runQueue() {
-  inlineConfirm('Apply to all queued jobs now?').then(ok => {
-    if (!ok) return;
-    fetch('/api/run-queue', {method: 'POST'})
-      .then(r => r.json())
-      .then(d => showToast(d.message, 'success'));
-  });
+  fetch('/api/run-queue', {method: 'POST'})
+    .then(r => r.json())
+    .then(d => showToast(d.message, 'success'));
 }
 
 function skipJob(id) {

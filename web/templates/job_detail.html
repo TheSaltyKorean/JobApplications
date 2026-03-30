@@ -102,12 +102,9 @@
 {% block scripts %}
 <script>
 function applyNow(id) {
-  inlineConfirm('Apply to this job now? A browser window will open.').then(ok => {
-    if (!ok) return;
-    fetch(`/jobs/${id}/apply`, {method: 'POST'})
-      .then(r => r.json())
-      .then(d => showToast(d.message || d.error, d.error ? 'error' : 'success'));
-  });
+  fetch(`/jobs/${id}/apply`, {method: 'POST'})
+    .then(r => r.json())
+    .then(d => showToast(d.message || d.error, d.error ? 'error' : 'success'));
 }
 
 function updateStatus(id, status) {

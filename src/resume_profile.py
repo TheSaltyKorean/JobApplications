@@ -1,292 +1,158 @@
 """
-Randy Walker's profile data extracted from his 4 resumes.
-This is the single source of truth for all Q&A answering and form filling.
+User profile data loaded from config/profile.yaml.
+Falls back to empty defaults if the config file doesn't exist yet.
+
+To set up: copy config/profile.template.yaml to config/profile.yaml
+and fill in your details.
 """
 
-# ─────────────────────────────────────────────────────────
-# CONTACT INFO
-# ─────────────────────────────────────────────────────────
-CONTACT = {
-    "first_name": "Randy",
-    "last_name": "Walker",
-    "full_name": "Randy Walker",
-    "email_primary": "randy.walker@live.com",
-    "email_screening": "jobs.randywalker@outlook.com",   # Used for Indian firm screening
-    "phone_primary": "(469) 679-3575",
-    "phone_screening": "(479) 871-2172",                 # Used for Indian firm screening
-    "city": "Austin",
-    "state": "TX",
-    "state_full": "Texas",
-    "zip": "78759",
-    "location": "Austin, TX 78759",
-    "linkedin": "https://www.linkedin.com/in/randywalker",
-    "github": "https://github.com/randywalker",
-    "website": "https://randywalker.com",
-    "authorized_to_work": True,
-    "requires_sponsorship": False,
-    "willing_to_relocate": False,
-    "preferred_work_type": "Hybrid or Remote",
-}
+import os
+import logging
+
+logger = logging.getLogger(__name__)
+
+_APP_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_PROFILE_PATH = os.path.join(_APP_ROOT, 'config', 'profile.yaml')
+_PROFILE_LOADED = False
+
+
+def _load_profile() -> dict:
+    """Load profile from YAML config file."""
+    global _PROFILE_LOADED
+    try:
+        import yaml
+    except ImportError:
+        logger.warning("PyYAML not installed. Run: pip install pyyaml")
+        return {}
+
+    if not os.path.exists(_PROFILE_PATH):
+        if not _PROFILE_LOADED:
+            logger.warning(
+                f"Profile not found at {_PROFILE_PATH}. "
+                "Copy config/profile.template.yaml to config/profile.yaml and fill in your details."
+            )
+            _PROFILE_LOADED = True
+        return {}
+
+    with open(_PROFILE_PATH, 'r', encoding='utf-8') as f:
+        data = yaml.safe_load(f) or {}
+
+    _PROFILE_LOADED = True
+    return data
+
+
+def _get(section: str, default=None):
+    """Get a section from the profile."""
+    profile = _load_profile()
+    return profile.get(section, default if default is not None else {})
+
 
 # ─────────────────────────────────────────────────────────
-# RESUME FILES  (relative to app root)
+# PUBLIC API  (same interface as before — drop-in replacement)
 # ─────────────────────────────────────────────────────────
-RESUMES = {
-    "executive":  "resumes/2025 Randy Walker - IT Executive.pdf",
-    "it_manager": "resumes/2025 Randy Walker - Tech Leader.pdf",
-    "cloud":      "resumes/2025 Randy Walker - Cloud.pdf",
-    "contract":   "resumes/2025 Randy Walker - Cloud Contract.pdf",  # Indian firm screening
-}
 
-# ─────────────────────────────────────────────────────────
-# EDUCATION
-# ─────────────────────────────────────────────────────────
-EDUCATION = [
-    {
-        "school": "University of Arkansas",
-        "degree": "Computer Science",
-        "degree_type": "Some College",
-        "field": "Computer Science",
-        "start_year": 1992,
-        "end_year": 1995,
-        "graduated": False,
-        "gpa": None,
+def _build_contact():
+    c = _get('contact', {})
+    return {
+        "first_name": c.get("first_name", ""),
+        "last_name": c.get("last_name", ""),
+        "full_name": f"{c.get('first_name', '')} {c.get('last_name', '')}".strip(),
+        "email_primary": c.get("email_primary", ""),
+        "email_screening": c.get("email_screening", c.get("email_primary", "")),
+        "phone_primary": c.get("phone_primary", ""),
+        "phone_screening": c.get("phone_screening", c.get("phone_primary", "")),
+        "city": c.get("city", ""),
+        "state": c.get("state", ""),
+        "state_full": c.get("state_full", ""),
+        "zip": c.get("zip", ""),
+        "location": f"{c.get('city', '')}, {c.get('state', '')} {c.get('zip', '')}".strip(', '),
+        "linkedin": c.get("linkedin", ""),
+        "github": c.get("github", ""),
+        "website": c.get("website", ""),
+        "authorized_to_work": c.get("authorized_to_work", True),
+        "requires_sponsorship": c.get("requires_sponsorship", False),
+        "willing_to_relocate": c.get("willing_to_relocate", False),
+        "preferred_work_type": c.get("preferred_work_type", ""),
     }
-]
 
-# ─────────────────────────────────────────────────────────
-# CERTIFICATIONS
-# ─────────────────────────────────────────────────────────
-CERTIFICATIONS = [
-    {"name": "AZ-900: Azure Fundamentals", "issuer": "Microsoft", "year": None},
-    {"name": "DP-900: Azure Data Fundamentals", "issuer": "Microsoft", "year": None},
-]
 
-# ─────────────────────────────────────────────────────────
-# SKILLS  (used for job matching)
-# ─────────────────────────────────────────────────────────
-SKILLS = [
-    # Cloud
-    "Azure", "Microsoft Azure", "Azure IaaS", "Azure PaaS", "Azure VMs",
-    "Azure Functions", "Azure App Services", "Azure SQL", "Azure AD",
-    "Azure Active Directory", "Azure DevOps", "Azure Monitor", "Azure Synapse",
-    "Azure Service Bus", "Azure CDN", "Azure Policy", "Azure Cost Management",
-    "IBM Cloud", "Cloud Architecture", "Cloud Strategy", "Cloud Operations",
-    "Cloud Governance", "Cloud Migration", "Cloud Transformation",
-    "Multi-Cloud", "Hybrid Cloud", "Cloud Center of Excellence",
-    # DevOps / Infrastructure
-    "DevOps", "CI/CD", "Terraform", "Infrastructure as Code", "IaC",
-    "GitHub", "GitHub Actions", "Azure Pipelines", "DevSecOps",
-    "Containerization", "Docker", "Kubernetes", "PaaS", "SaaS",
-    "Zero Trust", "Zero Trust Architecture",
-    # IT Leadership / Management
-    "IT Strategy", "IT Operations", "IT Infrastructure", "IT Governance",
-    "IT Management", "Technology Leadership", "Digital Transformation",
-    "Enterprise Architecture", "Solution Architecture",
-    "Budget Management", "FinOps", "Cost Optimization", "TCO",
-    "Vendor Management", "Contract Management", "SLA Management",
-    # Security / Compliance
-    "Cybersecurity", "Information Security", "Security",
-    "HIPAA", "HITRUST", "PCI-DSS", "ISO27001", "NIST",
-    "Compliance", "Risk Management", "Governance",
-    "Ransomware Recovery", "Incident Response",
-    # Development / Software
-    ".NET", ".NET Core", "C#", "MVC", "REST API",
-    "ETL", "Data Integration", "Power BI", "SQL",
-    "Azure Data Warehouse", "Synapse Analytics",
-    "SDLC", "Agile", "Scrum", "Waterfall",
-    # Business / Leadership
-    "Cross-functional Leadership", "Team Leadership", "Team Building",
-    "Mentoring", "Stakeholder Management", "Executive Communication",
-    "Project Management", "Program Management", "Change Management",
-    "Business Alignment", "Strategic Planning",
-    "Microsoft 365", "M365", "Office 365", "SharePoint", "Teams",
-    "MDM", "Intune", "Microsoft Intune",
-]
+# These are module-level properties that reload from config on access
+# For backward compatibility, we use a lazy-loading approach
+class _ProfileProxy:
+    """Lazy-loading proxy so profile.yaml changes are picked up without restart."""
 
-# ─────────────────────────────────────────────────────────
-# WORK HISTORY  (chronological, most recent first)
-# ─────────────────────────────────────────────────────────
-WORK_HISTORY = [
-    {
-        "title": "Vice President of IT Strategy & Infrastructure",
-        "company": "Bizzz Buzzz Technology & Consulting",
-        "start": "May 2024",
-        "end": "Present",
-        "current": True,
-        "years": 1,
-        "summary": (
-            "Led strategic consulting engagements for healthcare and enterprise clients, "
-            "including modernization of mission-critical legacy platforms and infrastructure governance. "
-            "Architected a multi-phase cloud migration roadmap for a core healthcare platform "
-            "resulting in a projected $9M ROI."
-        ),
-    },
-    {
-        "title": "Head of Cloud Architecture and Operations",
-        "company": "Performance Food Group",
-        "start": "Oct 2021",
-        "end": "Feb 2024",
-        "current": False,
-        "years": 2.5,
-        "summary": (
-            "Directed enterprise-wide cloud transformation for a Fortune 80 company with $50B+ revenue. "
-            "Oversaw a $12MM annual cloud infrastructure budget and led architects and engineers across "
-            "security, DevOps, and operations. Migrated 1,200+ servers to Azure and IBM Cloud. "
-            "Founded and led the Cloud Center of Excellence."
-        ),
-    },
-    {
-        "title": "Cloud Operations Leader",
-        "company": "Advanced Solutions International, Inc.",
-        "start": "Oct 2020",
-        "end": "Sep 2021",
-        "current": False,
-        "years": 1,
-        "summary": (
-            "Modernized and secured global cloud operations, transforming a legacy IT environment "
-            "into a resilient, security-first Azure ecosystem. Led ransomware remediation, established "
-            "security action team, coordinated PCI-DSS and ISO27001 audits."
-        ),
-    },
-    {
-        "title": "Azure Architect Director",
-        "company": "Cognizant / TriZetto Provider Solutions",
-        "start": "Aug 2019",
-        "end": "Aug 2020",
-        "current": False,
-        "years": 1,
-        "summary": (
-            "Directed Azure architecture and security strategy for healthcare technology division. "
-            "Managed $5M annual Azure budget and 7.4 million cloud assets. "
-            "Ensured HIPAA and HITRUST compliance across PHI workloads."
-        ),
-    },
-    {
-        "title": "Founder & President",
-        "company": "Harvest Data Corp",
-        "start": "Oct 2005",
-        "end": "Sep 2019",
-        "current": False,
-        "years": 14,
-        "summary": (
-            "Built and scaled a Micro ISV delivering automated data integration and BI solutions "
-            "for major retailers including Walmart and Dollar General. Led product strategy, "
-            "cloud architecture, development, and operations. Selected as Microsoft Azure Advisor. "
-            "Awarded $460K+ in Microsoft BizSpark grants."
-        ),
-    },
-    {
-        "title": "Co-Founder & President",
-        "company": "EZ Family Health",
-        "start": "Jun 2016",
-        "end": "Jun 2018",
-        "current": False,
-        "years": 2,
-        "summary": (
-            "Co-founded a healthcare patient portal startup. Built mobile-friendly cloud-based platform "
-            "with end-to-end encryption, HIPAA compliance, and Angular frontend."
-        ),
-    },
-]
+    @property
+    def CONTACT(self):
+        return _build_contact()
 
-YEARS_OF_EXPERIENCE = 20   # Total career years
-MANAGEMENT_YEARS = 10      # Years in management roles
-BUDGET_MANAGED = "$12MM"   # Largest budget managed
-TEAM_SIZE_MAX = 30         # Largest team led
+    @property
+    def RESUMES(self):
+        return _get('resumes', {
+            "executive": "resumes/executive.pdf",
+            "it_manager": "resumes/it_manager.pdf",
+            "cloud": "resumes/cloud.pdf",
+            "contract": "resumes/contract.pdf",
+        })
 
-# ─────────────────────────────────────────────────────────
-# AWARDS & ACTIVITIES
-# ─────────────────────────────────────────────────────────
-AWARDS = [
-    "ASP Insider (2016 – present)",
-    "Microsoft MVP Award (2008 – 2017)",
-    "Microsoft Azure Advisor – Early adopter providing critical feedback (NDA-only group)",
-    "$460,000+ Microsoft BizSpark grants recognizing technical innovation and startup excellence",
-]
+    @property
+    def EDUCATION(self):
+        return _get('education', [])
 
-ACTIVITIES = [
-    "Northwest Arkansas Developer Group, Co-founder & Board Member (2005 – 2020)",
-    "INETA (International .NET Association), Membership Mentor & Board Member (2007 – 2009)",
-    "Conference Speaker – local, regional, and national events including Microsoft TechEd (2007 – present)",
-]
+    @property
+    def CERTIFICATIONS(self):
+        return _get('certifications', [])
 
-# ─────────────────────────────────────────────────────────
-# COMMON QUESTION ANSWERS  (pre-built for automation)
-# ─────────────────────────────────────────────────────────
-COMMON_ANSWERS = {
-    # Salary / compensation
-    "salary_expectation": "180000",           # Update in settings
-    "salary_min": "150000",
-    "salary_max": "250000",
-    "hourly_rate": "120",                     # For contract roles
+    @property
+    def SKILLS(self):
+        return _get('skills', [])
 
-    # Work preferences
-    "start_date": "2 weeks",
-    "notice_period": "2 weeks",
-    "willing_to_relocate": "No",
-    "remote_preference": "Remote or Hybrid",
-    "work_authorization": "Yes, I am authorized to work in the United States",
-    "sponsorship_required": "No",
-    "veteran_status": "I am not a veteran",
-    "disability_status": "I choose not to disclose",
-    "gender": "Male",
-    "ethnicity": "I choose not to disclose",
+    @property
+    def WORK_HISTORY(self):
+        return _get('work_history', [])
 
-    # Professional
-    "years_of_experience": "20",
-    "management_experience": "Yes, I have 10+ years of management experience",
-    "largest_team": "25-30 engineers and architects",
-    "largest_budget": "$12 million annually",
-    "highest_education": "Some College – Computer Science, University of Arkansas",
+    @property
+    def COMMON_ANSWERS(self):
+        return _get('common_answers', {})
 
-    # Cover letter snippets
-    "why_interested_template": (
-        "I am excited about this opportunity because it aligns well with my 20 years of experience "
-        "in cloud architecture, IT strategy, and leading high-performing infrastructure teams. "
-        "My background managing enterprise-scale Azure environments, including a $12MM annual budget "
-        "at a Fortune 80 company, positions me to deliver immediate value in this role."
-    ),
+    @property
+    def SUMMARIES(self):
+        return _get('summaries', {})
 
-    # Common behavioral answers
-    "greatest_strength": (
-        "My ability to bridge technical strategy with business outcomes. I translate complex infrastructure "
-        "decisions into language executives understand, while keeping engineering teams aligned and motivated."
-    ),
-    "greatest_weakness": (
-        "I sometimes take on too much ownership of projects. I have learned to delegate more effectively "
-        "by investing in team development and building strong centers of excellence."
-    ),
-    "leadership_style": (
-        "I lead by building trust and clarity. I align teams around shared goals, remove blockers, "
-        "and invest in developing people. I have a founder's mindset – I move fast, hold people accountable, "
-        "and always tie technology decisions back to business impact."
-    ),
-}
+    @property
+    def AWARDS(self):
+        return _get('awards', [])
 
-# ─────────────────────────────────────────────────────────
-# PROFESSIONAL SUMMARY (by resume type)
-# ─────────────────────────────────────────────────────────
-SUMMARIES = {
-    "executive": (
-        "Experienced IT executive with a founder's mindset and a strong track record of translating "
-        "business goals into scalable, secure, and cost-effective technology solutions. Deep expertise "
-        "in Azure, Microsoft 365, DevOps, and governance, with industry experience spanning healthcare, "
-        "finance, CPG, and the public sector."
-    ),
-    "it_manager": (
-        "Seasoned IT leader with over a decade of experience aligning technology strategies with business "
-        "goals. Proven track record in managing IT infrastructure, driving digital transformation, and "
-        "leading cross-functional teams to deliver scalable, secure, and innovative solutions."
-    ),
-    "cloud": (
-        "Cloud Leader with nearly two decades of expertise in cloud architecture, governance, and "
-        "infrastructure optimization. Demonstrates mastery in Azure, the Microsoft Stack, and .NET, "
-        "with a proven track record leading high-performing teams and implementing DevOps best practices."
-    ),
-    "contract": (
-        "Cloud Leader with nearly two decades of expertise in cloud architecture, governance, and "
-        "infrastructure optimization. Demonstrates mastery in Azure, the Microsoft Stack, and .NET, "
-        "with a proven track record leading high-performing teams and implementing DevOps best practices."
-    ),
-}
+    @property
+    def ACTIVITIES(self):
+        return _get('activities', [])
+
+    @property
+    def YEARS_OF_EXPERIENCE(self):
+        cs = _get('career_summary', {})
+        return cs.get('years_of_experience', 0)
+
+    @property
+    def MANAGEMENT_YEARS(self):
+        cs = _get('career_summary', {})
+        return cs.get('management_years', 0)
+
+    @property
+    def BUDGET_MANAGED(self):
+        cs = _get('career_summary', {})
+        return cs.get('budget_managed', '')
+
+    @property
+    def TEAM_SIZE_MAX(self):
+        cs = _get('career_summary', {})
+        return cs.get('team_size_max', 0)
+
+
+_proxy = _ProfileProxy()
+
+# Module-level names for backward compatibility
+# These are accessed as: from src.resume_profile import CONTACT, SKILLS, etc.
+def __getattr__(name):
+    """Module-level __getattr__ for lazy loading profile data."""
+    if hasattr(_proxy, name):
+        return getattr(_proxy, name)
+    raise AttributeError(f"module 'resume_profile' has no attribute {name}")

@@ -25,26 +25,33 @@ Automated job application assistant for Randy Walker — built with Python, Flas
 
 ## Quick Start
 
-### Windows (PowerShell)
+### 1. Install
 ```powershell
-.\install.ps1   # First-time setup
-.\start.ps1     # Start the app
+.\install.ps1   # Windows PowerShell (auto-installs Python if needed)
 ```
-
-### Windows (Command Prompt)
-```
-install.bat     # First-time setup
-start.bat       # Start the app
-```
-
-### Manual
+Or manually:
 ```bash
 pip install -r requirements.txt
 playwright install chromium
-python main.py
 ```
 
-Then open `http://localhost:5000`
+### 2. Configure Your Profile
+```bash
+cp config/profile.template.yaml config/profile.yaml
+```
+Edit `config/profile.yaml` with your personal info, skills, work history, and resume file paths.
+
+### 3. Run
+```powershell
+.\start.ps1     # Start the app
+```
+Then open `http://localhost:5000` (or `http://<your-ip>:5000` from another PC)
+
+### 4. Set Up Credentials
+Go to Settings in the web UI to configure:
+- LinkedIn session cookie (for job searching)
+- ATS platform credentials (Workday, SuccessFactors, etc.)
+- Email notifications
 
 ## Structure
 

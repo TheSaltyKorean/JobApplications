@@ -161,6 +161,95 @@
   </div>
 </form>
 
+<!-- ATS Credentials (separate from main settings form) -->
+<div style="margin-top: 32px;">
+  <h2>ATS Platform Credentials</h2>
+  <p style="color:#718096; margin-bottom:16px;">
+    Stored per-platform. Passwords are auto-generated when the app creates a new account on an ATS site.
+    You can also set them manually below.
+  </p>
+
+  <div class="card">
+    <table class="jobs-table full-table" id="creds-table">
+      <thead>
+        <tr><th>Platform</th><th>Email</th><th>Password</th><th>Actions</th></tr>
+      </thead>
+      <tbody>
+        {% for key, cred in ats_credentials.items() %}
+        <tr>
+          <td><strong>{{ cred.platform_name }}</strong></td>
+          <td>{{ cred.email }}</td>
+          <td>
+            {% if cred.password_set %}
+              <span class="password-masked" id="pw-{{ key }}">********</span>
+              <button class="btn-sm btn-gray" onclick="togglePw('{{ key }}')">Show</button>
+            {% else %}
+              <em>Not set</em>
+            {% endif %}
+          </td>
+          <td>
+            <button class="btn-sm btn-blue" onclick="editCred('{{ key }}')">Edit</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div style="margin-top:16px;">
+      <h4>Add Platform</h4>
+      <div style="display:flex; gap:8px; align-items:end; flex-wrap:wrap;">
+        <div class="form-group" style="margin:0">
+          <label>Platform</label>
+          <select id="new-platform" class="form-control">
+            <option value="workday">Workday</option>
+            <option value="successfactors">SAP SuccessFactors</option>
+            <option value="taleo">Oracle/Taleo</option>
+            <option value="greenhouse">Greenhouse</option>
+            <option value="lever">Lever</option>
+            <option value="icims">iCIMS</option>
+            <option value="smartrecruiters">SmartRecruiters</option>
+            <option value="jobvite">Jobvite</option>
+            <option value="bamboohr">BambooHR</option>
+            <option value="ashby">Ashby</option>
+            <option value="linkedin">LinkedIn</option>
+            <option value="indeed">Indeed</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label>Email</label>
+          <input type="email" id="new-email" class="form-control" placeholder="your@email.com">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label>Password (leave blank to auto-generate)</label>
+          <input type="text" id="new-password" class="form-control" placeholder="Auto-generate if blank">
+        </div>
+        <button class="btn btn-primary" onclick="addCred()">Add</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Generated Accounts Log -->
+  {% if generated_accounts %}
+  <div class="card" style="margin-top:16px;">
+    <h4>Auto-Generated Account Log</h4>
+    <p style="color:#718096; font-size:0.85rem;">Keep this as a reference. Passwords shown in plain text for your records.</p>
+    <table class="jobs-table full-table">
+      <thead><tr><th>Platform</th><th>Email</th><th>Password</th><th>Created</th></tr></thead>
+      <tbody>
+        {% for acct in generated_accounts %}
+        <tr>
+          <td>{{ acct.platform_name }}</td>
+          <td>{{ acct.email }}</td>
+          <td style="font-family:monospace">{{ acct.password }}</td>
+          <td>{{ acct.created[:10] if acct.created else '' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -184,6 +273,47 @@ function applyPreset(name) {
   document.getElementById('imap_host').value = p.imap_host;
   document.getElementById('smtp_host').value = p.smtp_host;
   document.getElementById('smtp_port').value = p.smtp_port;
+}
+
+// ATS Credentials
+const allPasswords = {{ ats_passwords | tojson }};
+
+function togglePw(key) {
+  const el = document.getElementById('pw-' + key);
+  if (el.textContent === '********') {
+    el.textContent = allPasswords[key] || '(unknown)';
+  } else {
+    el.textContent = '********';
+  }
+}
+
+function addCred() {
+  const platform = document.getElementById('new-platform').value;
+  const email = document.getElementById('new-email').value;
+  const password = document.getElementById('new-password').value;
+  if (!email) { alert('Enter an email address'); return; }
+  fetch('/api/ats-credentials', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({platform, email, password})
+  }).then(r => r.json()).then(d => {
+    if (d.ok) location.reload();
+    else alert(d.error || 'Failed');
+  });
+}
+
+function editCred(key) {
+  const email = prompt('Email for ' + key + ':', '');
+  if (!email) return;
+  const password = prompt('Password (leave blank to auto-generate):', '');
+  fetch('/api/ats-credentials', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({platform: key, email, password})
+  }).then(r => r.json()).then(d => {
+    if (d.ok) location.reload();
+    else alert(d.error || 'Failed');
+  });
 }
 </script>
 {% endblock %}

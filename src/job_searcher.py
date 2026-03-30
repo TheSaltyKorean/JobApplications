@@ -27,6 +27,34 @@ def _random_delay(min_s=1.5, max_s=4.0):
 
 
 # ─────────────────────────────────────────────────────────
+# Expired Job Detection
+# ─────────────────────────────────────────────────────────
+
+EXPIRED_INDICATORS = [
+    'this job has expired',
+    'this job is no longer available',
+    'no longer accepting applications',
+    'this position has been filled',
+    'position is no longer available',
+    'job is closed',
+    'this listing has expired',
+    'this job posting has expired',
+    'application deadline has passed',
+    'we are no longer accepting',
+    'this role has been filled',
+    'job no longer exists',
+    'sorry, this job is no longer',
+    'this opportunity is no longer',
+]
+
+
+def is_expired_page(page_text: str) -> bool:
+    """Check if page text indicates an expired or closed job listing."""
+    text_lower = page_text[:2000].lower()
+    return any(indicator in text_lower for indicator in EXPIRED_INDICATORS)
+
+
+# ─────────────────────────────────────────────────────────
 # Playwright stealth setup
 # ─────────────────────────────────────────────────────────
 
@@ -592,6 +620,23 @@ async def fetch_job_from_url(url: str) -> Optional[dict]:
         try:
             await page.goto(url, wait_until='domcontentloaded', timeout=30000)
             await asyncio.sleep(3)
+
+            # Check for expired listings
+            page_text = await page.inner_text('body')
+            if is_expired_page(page_text):
+                logger.info(f"Expired listing: {url}")
+                return {
+                    'job_id': _make_job_id(platform, url),
+                    'title': 'EXPIRED',
+                    'company': '',
+                    'location': '',
+                    'platform': platform,
+                    'url': url,
+                    'description': '',
+                    'status': 'skipped',
+                    'notes': 'Job listing expired or no longer available',
+                    'posted_date': '', 'salary': '', 'job_type': '',
+                }
 
             title = ''
             company = ''

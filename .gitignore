@@ -17,8 +17,10 @@ logs/
 *.db
 *.sqlite
 
-# Config with secrets
+# Config with secrets (personal data, credentials)
 config/settings.json
+config/profile.yaml
+config/ats_credentials.json
 
 # Resume PDFs (personal documents - don't commit)
 resumes/

@@ -22,6 +22,7 @@ from src import notifier
 from src import claude_helper
 from src.job_pipeline import process_job, process_job_batch
 from src.resume_profile import CONTACT
+from src import ats_credentials
 
 logger = logging.getLogger(__name__)
 
@@ -370,13 +371,44 @@ def settings():
         'Outlook/Live': {'imap_host': 'outlook.office365.com', 'smtp_host': 'smtp.office365.com', 'smtp_port': 587},
         'Gmail': {'imap_host': 'imap.gmail.com', 'smtp_host': 'smtp.gmail.com', 'smtp_port': 587},
     }
+    # ATS credentials for display
+    ats_creds = ats_credentials.get_all_platforms()
+    generated_accounts = ats_credentials.get_generated_accounts()
+    # Raw passwords for show/hide toggle (keyed by platform)
+    ats_passwords = {}
+    raw_creds = ats_credentials._load_creds().get('platforms', {})
+    for k, v in raw_creds.items():
+        ats_passwords[k] = v.get('password', '')
+
     return render_template('settings.html', settings=current,
-                           claude_status=claude_status, email_presets=email_presets)
+                           claude_status=claude_status, email_presets=email_presets,
+                           ats_credentials=ats_creds,
+                           generated_accounts=generated_accounts,
+                           ats_passwords=ats_passwords)
 
 
 # ─────────────────────────────────────────────────────────
 # ROUTES – API endpoints (used by JS)
 # ─────────────────────────────────────────────────────────
+
+@app.route('/api/ats-credentials', methods=['POST'])
+def api_ats_credentials():
+    """Add or update ATS platform credentials."""
+    data = request.get_json()
+    platform = data.get('platform', '')
+    email = data.get('email', '')
+    password = data.get('password', '')
+
+    if not platform or not email:
+        return jsonify({'ok': False, 'error': 'Platform and email required'})
+
+    if password:
+        ats_credentials.set_credentials(platform, email, password)
+    else:
+        ats_credentials.get_or_create_credentials(platform, email)
+
+    return jsonify({'ok': True})
+
 
 @app.route('/api/stats')
 def api_stats():

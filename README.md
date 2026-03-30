@@ -9,12 +9,14 @@ JobApplicationBot handles the tedious parts of job hunting so you can focus on p
 - **Searches** LinkedIn and Indeed using your preferred job titles and location
 - **Filters** out irrelevant roles (product manager, electrical engineer, sales, nursing, etc.) automatically
 - **Scores** each job against your skills and experience, keeping only matches above your threshold
-- **Picks the right resume** based on role level (executive, cloud, contract, management)
+- **Picks the right resume** based on configurable routing rules (title patterns, staffing firm detection, default fallback)
 - **Detects staffing firms** and routes them to screening contact info and a contract resume
 - **Fills applications** across LinkedIn Easy Apply, Workday, Indeed, Taleo/Oracle, SuccessFactors, Greenhouse, Lever, and more
+- **Follows cross-site redirects** when LinkedIn/Indeed jobs link to external ATS platforms
 - **Answers screening questions** using Claude AI (CLI, API, or manual clipboard mode)
 - **Manages ATS credentials** per-platform, auto-generating secure passwords for new accounts
 - **Tracks everything** in a web dashboard: new, queued, applied, interview, offer, rejected, ghosted
+- **Web notifications** replace system tray popups — all alerts appear as in-page toasts
 
 ## Requirements
 
@@ -49,6 +51,8 @@ pip install -r requirements.txt
 playwright install chromium
 ```
 
+**Note**: Make sure `pyyaml` is installed (included in requirements.txt). The app uses YAML for all profile and resume configuration.
+
 ### Optional: Claude CLI
 
 For fully automated screening question answers, install the Claude CLI:
@@ -70,7 +74,8 @@ cp config/profile.template.yaml config/profile.yaml
 Edit `config/profile.yaml` with your information. This file controls everything the bot knows about you:
 
 - **contact** — Name, email, phone, city/state, LinkedIn URL
-- **resumes** — Paths to your PDF resumes (relative to project root)
+- **resumes** — Paths to your PDF resumes (auto-managed when you upload via the web UI)
+- **resume_routing** — Rules that map job title patterns to specific resumes
 - **education** — Schools, degrees, fields of study
 - **certifications** — Professional certifications (AWS, PMP, etc.)
 - **skills** — Technical and soft skills the bot matches against job descriptions
@@ -82,7 +87,9 @@ The profile file is gitignored so your personal data never gets committed.
 
 ### 2. Add Your Resumes
 
-Go to **Settings** in the web dashboard and scroll to **Resumes & Routing**. Upload your PDF resumes directly through the UI and assign a key name to each (e.g. `executive`, `cloud`, `contract`, `it_manager`). You can also rename or delete resumes from there.
+Go to **Settings** in the web dashboard and scroll to **Resumes & Routing**. Upload your PDF resumes directly through the UI and assign a key name to each (e.g. `executive`, `cloud`, `contract`, `it_manager`). You can rename or delete resumes from there too.
+
+The upload automatically updates `config/profile.yaml` and cleans out any placeholder entries that point to nonexistent files. Any resume entries with missing PDF files are automatically ignored at runtime.
 
 Alternatively, place PDFs manually in the `resumes/` directory and map them in `config/profile.yaml`:
 
@@ -94,16 +101,26 @@ resumes:
   it_manager: "resumes/Your Name - IT Manager.pdf"
 ```
 
-The bot picks which resume to use based on configurable routing rules (also editable in Settings):
+### 3. Configure Resume Routing
 
-| Job Type | Resume Used |
+Resume routing rules are editable in **Settings > Resume Routing Rules**. Rules are checked in order — first match wins:
+
+| Rule Type | How It Works |
 |---|---|
-| VP / CxO / SVP / Executive titles | Executive resume |
-| Cloud / Azure / Infrastructure / DevOps titles | Cloud resume |
-| Indian IT staffing firm (auto-detected) | Contract resume (with screening contact info) |
-| All other management roles | IT Manager resume (default) |
+| **Indian IT Staffing Firm** | Auto-detected by company name. Routes to your contract resume with screening contact info. |
+| **Title Patterns** | Regex patterns matched against job titles (e.g. `\bvp\b`, `\bcloud\b`). |
+| **Default Fallback** | Used when no title patterns match. |
 
-### 3. Start the App
+Example routing:
+
+| Resume Key | Matches |
+|---|---|
+| `contract` | Indian IT staffing firms (auto-detected) |
+| `executive` | VP, Vice President, CTO, CIO, CISO, SVP, Chief, Head of, Executive Director, President |
+| `cloud` | Cloud, Azure, AWS, Infrastructure, DevOps, Platform, SRE, Security, Architect |
+| `it_manager` | Everything else (default fallback) |
+
+### 4. Start the App
 
 ```powershell
 # Windows
@@ -113,15 +130,19 @@ The bot picks which resume to use based on configurable routing rules (also edit
 python main.py
 ```
 
-The dashboard opens automatically at `http://localhost:5000`. You can access it from other PCs on your network at `http://<your-ip>:5000`.
+The dashboard is available at `http://localhost:5000`. Access it from other devices on your LAN at `http://<your-ip>:5000`.
 
-### 4. Configure Settings
+### 5. Configure Settings
 
 Open the Settings page in the dashboard to configure:
 
 **LinkedIn Session Cookie** — Required for LinkedIn job searching. Get it from Chrome DevTools: Application tab, Cookies, `linkedin.com`, copy the `li_at` cookie value.
 
-**ATS Platform Credentials** — Set email/username/password for each ATS platform you use (Workday, SuccessFactors, Taleo, etc.). When the bot encounters a new ATS site during applications, it auto-generates a secure password and stores it for you. Taleo uses a username instead of email for login.
+**Indeed Credentials** — Set your Indeed email and password under ATS Platform Credentials. The app logs into Indeed at the start of each application session, similar to how LinkedIn uses a session cookie. Indeed is a single-account platform — you only need one set of credentials.
+
+**ATS Platform Credentials** — Set email/username/password for each ATS platform. Platforms like LinkedIn and Indeed use a single account. Platforms like Workday and Taleo create per-company credentials since each company runs its own instance. When the bot encounters a new ATS during applications, it auto-generates a secure password. Taleo uses a username instead of email for login.
+
+**Debug Mode** — When enabled (default), Playwright opens a visible browser window so you can watch applications being filled out. Disable for headless/background operation.
 
 **Email Notifications** — Optional IMAP/SMTP configuration for job alert monitoring and email notifications. Quick presets available for Outlook/Live and Gmail.
 
@@ -158,10 +179,19 @@ Click any job to see its full details, match score, matched skills, and Q&A hist
 
 You can apply in two ways:
 
-- **Apply Now** — Click on any job to apply immediately. A browser window opens and the bot fills out the application.
+- **Apply Now** — Click on any job to apply immediately. A browser window opens (in debug mode) and the bot fills out the application.
 - **Apply Queue** — Queue multiple jobs and click "Apply Queue" to process them all in sequence.
 
 The bot handles multi-step application forms, uploads your resume, fills personal info, and answers screening questions. If it encounters a login wall on an ATS site, it uses your stored credentials or creates a new account.
+
+### Cross-Site Redirects
+
+Many LinkedIn and Indeed jobs redirect to external ATS platforms ("Apply on company website"). The bot handles this automatically:
+
+1. Detects the external apply link on the LinkedIn/Indeed page
+2. Follows the redirect (including Indeed's `applystart` intermediate URLs)
+3. Identifies the destination ATS platform (Workday, Taleo, Greenhouse, etc.)
+4. Routes to the correct platform-specific handler
 
 ### Keyboard Shortcuts
 
@@ -182,19 +212,23 @@ After applying, track your progress through the pipeline:
 
 The bot can apply across these platforms:
 
-| Platform | Login Required | Notes |
+| Platform | Auth Type | Notes |
 |---|---|---|
-| LinkedIn Easy Apply | Yes (session cookie) | Multi-step modal form |
-| Workday | Yes (per-company account) | Auto-creates accounts, company-specific credentials |
-| Indeed | Yes (session) | Handles Indeed Apply flow |
-| Oracle/Taleo | Yes (username-based login) | Multi-step, uses username not email |
-| SAP SuccessFactors | Yes | Multi-step form flow |
-| Greenhouse | No | Usually single-page form |
-| Lever | No | Single-page form at /apply |
-| iCIMS | Yes | Generic form handler |
+| LinkedIn Easy Apply | Session cookie | Multi-step modal form |
+| Indeed | Email/password login | Logs in at session start; follows redirects to external ATS |
+| Workday | Per-company account | Auto-creates accounts, company-specific credentials |
+| Oracle/Taleo | Username-based login | Multi-step, uses username not email |
+| SAP SuccessFactors | Email/password | Multi-step form flow |
+| Greenhouse | None | Usually single-page form |
+| Lever | None | Single-page form at /apply |
+| iCIMS | Varies | Generic form handler |
 | SmartRecruiters | Varies | Generic form handler |
 
-When a LinkedIn or Indeed job redirects to an external ATS (e.g., "Apply on company website" goes to Workday), the bot detects the redirect and routes to the correct handler automatically.
+### Notifications
+
+All notifications appear as in-page toasts in the web dashboard. Background events (search complete, application submitted, application failed) are delivered via a polling API — no system tray or OS-level notifications required. Notifications don't repeat when you navigate between pages.
+
+Optional email notifications can be configured in Settings.
 
 ## Architecture
 
@@ -214,18 +248,18 @@ JobApplicationBot/
 │
 ├── src/
 │   ├── resume_profile.py    # Loads profile.yaml, exposes CONTACT, SKILLS, etc.
-│   ├── job_analyzer.py      # Role classification, skill matching, scoring
+│   ├── job_analyzer.py      # Role classification, skill matching, scoring, resume routing
 │   ├── job_searcher.py      # LinkedIn + Indeed scrapers, expired job detection
 │   ├── job_pipeline.py      # Analyze → score → upsert flow
-│   ├── applicator.py        # Form filling for all ATS platforms
+│   ├── applicator.py        # Form filling for all ATS platforms + cross-site redirect handling
 │   ├── ats_credentials.py   # Per-platform credential management
 │   ├── claude_helper.py     # Q&A via Claude CLI / API / clipboard
-│   ├── notifier.py          # Web + email notifications
+│   ├── notifier.py          # Web toast + email notifications
 │   ├── email_monitor.py     # IMAP job alert monitoring
 │   └── database.py          # SQLite job tracking
 │
 └── web/
-    ├── app.py               # Flask routes and API endpoints
+    ├── app.py               # Flask routes, API endpoints, resume upload
     ├── templates/           # Jinja2 HTML templates
     └── static/style.css     # Dashboard styling
 ```
@@ -234,15 +268,21 @@ JobApplicationBot/
 
 **YAML profile over hardcoded data** — All personal information lives in `config/profile.yaml` which is gitignored. The template file shows the structure without any real data.
 
-**Per-platform ATS credentials** — Each ATS platform (Workday, Taleo, etc.) gets its own email/username/password. Workday stores credentials per-company since each company has its own Workday instance.
+**Web-based resume management** — Upload, rename, and delete resumes directly from the Settings page. The app auto-updates `profile.yaml` and cleans out entries pointing to missing files.
+
+**Configurable resume routing** — Title-to-resume mapping is defined in `profile.yaml` under `resume_routing` and editable via the web UI. Rules support regex title patterns, auto-detection of Indian staffing firms, and a default fallback.
+
+**Single-account vs per-company credentials** — LinkedIn and Indeed use one set of stored credentials (session cookie and email/password respectively). Workday, Taleo, and other ATS platforms store credentials per-company since each company runs its own instance.
+
+**Debug mode** — A Settings toggle controls whether Playwright runs with a visible browser (debug mode, on by default) or headless (production/background mode).
 
 **HTML entities instead of emoji** — Templates use `&#x1F916;` instead of emoji characters to avoid encoding issues across different OS/git configurations.
 
-**Toast notifications** — All confirmations and alerts use in-page toast overlays instead of browser `alert()`/`confirm()` dialogs. Background task notifications (search complete, application submitted) poll the server every 5 seconds.
+**Toast notifications** — All confirmations and alerts use in-page toast overlays instead of browser `alert()`/`confirm()` dialogs. Background task notifications poll the server every 5 seconds with deduplication via `sessionStorage`.
 
 **Expired job detection** — The scraper checks page text for phrases like "this job has expired" or "no longer accepting applications" and auto-skips them.
 
-**Resume routing** — The analyzer classifies each job by level (executive, management, IC) and type (cloud, general IT), then picks the best-matching resume from your collection.
+**Missing file resilience** — Resume entries in `profile.yaml` that point to nonexistent files are automatically filtered out at runtime, preventing crashes from placeholder or deleted entries.
 
 ## Claude Q&A Priority
 
@@ -269,15 +309,23 @@ This keeps your job list focused on relevant IT management and leadership roles.
 
 ## Troubleshooting
 
+**"Resume not found" errors** — Go to Settings > Resumes & Routing, delete any entries with missing files, and re-upload your PDFs. The app also auto-skips entries whose files don't exist, so a restart may fix it.
+
 **LinkedIn not returning results** — Make sure your `li_at` session cookie is current. LinkedIn cookies expire periodically. Get a fresh one from Chrome DevTools.
 
-**"Resume not found" errors** — Check that your resume filenames in `config/profile.yaml` exactly match the files in the `resumes/` directory (case-sensitive).
+**Indeed login failing** — Add your Indeed email and password under Settings > ATS Platform Credentials. The app logs in at the start of each session.
 
-**Workday login failing** — Each company has its own Workday instance. If auto-login fails, add credentials manually in Settings. The platform key shows which company instance it's for.
+**Indeed redirecting to external ATS** — This is normal. Many Indeed jobs link to the company's own ATS (Workday, Taleo, etc.). The bot follows the redirect and applies on the destination platform.
+
+**Workday login failing** — Each company has its own Workday instance. If auto-login fails, add credentials manually in Settings. The platform key shows which company instance it's for (e.g. `workday_microsoft`).
 
 **Taleo login failing** — Taleo uses a username, not email, for login. Make sure the Username field is set in your ATS credentials (Settings page).
 
-**App won't stop** — Use the Stop button in the navbar, or visit `http://localhost:5000/api/shutdown`.
+**Can't see what the bot is doing** — Make sure Debug Mode is enabled in Settings (on by default). This shows the browser window during applications.
+
+**Notifications keep repeating** — Clear your browser's session storage, or just refresh the page. Notifications use `sessionStorage` to track which ones you've already seen.
+
+**App won't stop** — Use the Stop button in the navbar, or visit `http://localhost:5000/api/shutdown`, or press Ctrl+C in the terminal.
 
 **Encoding errors in templates** — If you see `UnicodeDecodeError`, run `git checkout -- web/templates/` to force re-extract template files with correct encoding.
 

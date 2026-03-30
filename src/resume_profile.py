@@ -87,12 +87,13 @@ class _ProfileProxy:
 
     @property
     def RESUMES(self):
-        return _get('resumes', {
-            "executive": "resumes/executive.pdf",
-            "it_manager": "resumes/it_manager.pdf",
-            "cloud": "resumes/cloud.pdf",
-            "contract": "resumes/contract.pdf",
-        })
+        resumes = _get('resumes', {})
+        if not resumes:
+            logger.warning(
+                "No resumes configured in profile.yaml! "
+                "Add a 'resumes' section with paths to your PDF files."
+            )
+        return resumes
 
     @property
     def EDUCATION(self):

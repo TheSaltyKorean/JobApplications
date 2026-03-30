@@ -161,6 +161,74 @@
   </div>
 </form>
 
+<!-- Resume Routing -->
+<div style="margin-top: 32px;">
+  <h2>Resume Routing</h2>
+  <p style="color:#718096; margin-bottom:16px;">
+    Controls which resume is sent for each job. Rules are checked in order &mdash; first match wins.
+    Edit <code>config/profile.yaml</code> to change resume file paths, or adjust title patterns below.
+  </p>
+
+  <div class="card">
+    <h4>Available Resumes</h4>
+    <table class="jobs-table full-table">
+      <thead><tr><th>Key</th><th>File Path</th></tr></thead>
+      <tbody>
+        {% for key, path in resume_files.items() %}
+        <tr><td><strong>{{ key }}</strong></td><td style="font-family:monospace;font-size:0.85rem">{{ path }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card" style="margin-top:16px;">
+    <h4>Routing Rules <small style="color:#718096">(order matters &mdash; first match wins)</small></h4>
+    <div id="routing-rules">
+      {% for rule in resume_routing %}
+      <div class="routing-rule" style="border:1px solid #334155;border-radius:8px;padding:12px 16px;margin-bottom:10px;background:#1a2332;">
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+          <div>
+            <label style="font-size:0.8rem;color:#718096;">Resume</label><br>
+            <select class="form-control rule-resume" style="width:150px;">
+              {% for key in resume_files %}
+              <option value="{{ key }}" {% if rule.resume == key %}selected{% endif %}>{{ key }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          {% if rule.match == 'indian_firm' %}
+          <div style="flex:1;">
+            <label style="font-size:0.8rem;color:#718096;">Match Type</label><br>
+            <span class="badge badge-orange" style="font-size:0.9rem">Auto: Indian IT Staffing Firm</span>
+            <input type="hidden" class="rule-type" value="indian_firm">
+          </div>
+          {% elif rule.default %}
+          <div style="flex:1;">
+            <label style="font-size:0.8rem;color:#718096;">Match Type</label><br>
+            <span class="badge badge-resume" style="font-size:0.9rem">Default fallback</span>
+            <input type="hidden" class="rule-type" value="default">
+          </div>
+          {% else %}
+          <div style="flex:1;">
+            <label style="font-size:0.8rem;color:#718096;">Title patterns (one per line, regex)</label><br>
+            <textarea class="form-control rule-titles" rows="3" style="font-family:monospace;font-size:0.85rem;">{{ rule.titles | join('\n') }}</textarea>
+            <input type="hidden" class="rule-type" value="titles">
+          </div>
+          {% endif %}
+          <div>
+            <button class="btn-sm btn-red" onclick="this.closest('.routing-rule').remove()" style="margin-top:16px;">&#x2715;</button>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div style="margin-top:12px;display:flex;gap:8px;">
+      <button class="btn btn-secondary" onclick="addRoutingRule()">+ Add Title Rule</button>
+      <button class="btn btn-primary" onclick="saveRouting()">Save Routing</button>
+    </div>
+  </div>
+</div>
+
 <!-- ATS Credentials (separate from main settings form) -->
 <div style="margin-top: 32px;">
   <h2>ATS Platform Credentials</h2>
@@ -305,6 +373,67 @@ function addCred() {
   }).then(r => r.json()).then(d => {
     if (d.ok) location.reload();
     else showToast(d.error || 'Failed', 'error');
+  });
+}
+
+// Resume Routing
+const resumeKeys = {{ resume_files.keys() | list | tojson }};
+
+function addRoutingRule() {
+  const container = document.getElementById('routing-rules');
+  const div = document.createElement('div');
+  div.className = 'routing-rule';
+  div.style.cssText = 'border:1px solid #334155;border-radius:8px;padding:12px 16px;margin-bottom:10px;background:#1a2332;';
+  const opts = resumeKeys.map(k => `<option value="${k}">${k}</option>`).join('');
+  div.innerHTML = `
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+      <div>
+        <label style="font-size:0.8rem;color:#718096;">Resume</label><br>
+        <select class="form-control rule-resume" style="width:150px;">${opts}</select>
+      </div>
+      <div style="flex:1;">
+        <label style="font-size:0.8rem;color:#718096;">Title patterns (one per line, regex)</label><br>
+        <textarea class="form-control rule-titles" rows="3" style="font-family:monospace;font-size:0.85rem;" placeholder="\\bcloud\\b&#10;\\bazure\\b"></textarea>
+        <input type="hidden" class="rule-type" value="titles">
+      </div>
+      <div>
+        <button class="btn-sm btn-red" onclick="this.closest('.routing-rule').remove()" style="margin-top:16px;">&#x2715;</button>
+      </div>
+    </div>`;
+  // Insert before the default rule (last one)
+  const rules = container.querySelectorAll('.routing-rule');
+  const lastRule = rules[rules.length - 1];
+  if (lastRule && lastRule.querySelector('.rule-type[value="default"]')) {
+    container.insertBefore(div, lastRule);
+  } else {
+    container.appendChild(div);
+  }
+}
+
+function saveRouting() {
+  const rules = [];
+  document.querySelectorAll('.routing-rule').forEach(el => {
+    const resume = el.querySelector('.rule-resume').value;
+    const type = el.querySelector('.rule-type').value;
+    if (type === 'indian_firm') {
+      rules.push({resume, match: 'indian_firm'});
+    } else if (type === 'default') {
+      rules.push({resume, default: true});
+    } else {
+      const textarea = el.querySelector('.rule-titles');
+      const titles = textarea.value.split('\n').map(s => s.trim()).filter(s => s);
+      if (titles.length > 0) {
+        rules.push({resume, titles});
+      }
+    }
+  });
+  fetch('/api/resume-routing', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({routing: rules})
+  }).then(r => r.json()).then(d => {
+    if (d.ok) showToast('Resume routing saved!', 'success');
+    else showToast(d.error || 'Failed to save', 'error');
   });
 }
 

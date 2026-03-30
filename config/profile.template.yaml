@@ -25,10 +25,40 @@ contact:
   preferred_work_type: "Hybrid or Remote"   # Remote, Hybrid, On-site, etc.
 
 resumes:
-  executive: "resumes/executive.pdf"
-  it_manager: "resumes/it_manager.pdf"
-  cloud: "resumes/cloud.pdf"
-  contract: "resumes/contract.pdf"
+  # Keys are your own labels. Paths are relative to the project root.
+  # You can name these anything — just reference the same keys in resume_routing below.
+  executive: "resumes/your-name-executive.pdf"
+  it_manager: "resumes/your-name-tech-leader.pdf"
+  cloud: "resumes/your-name-cloud.pdf"
+  contract: "resumes/your-name-contract.pdf"
+
+# Resume routing: maps job title patterns to resume keys.
+# Order matters — first match wins.
+# 'match: indian_firm' is a special rule for auto-detected staffing firms.
+# 'default: true' marks the fallback resume if no title patterns match.
+# Title patterns are case-insensitive Python regex (use \\b for word boundaries).
+resume_routing:
+  - resume: contract
+    match: indian_firm
+  - resume: executive
+    titles:
+      - "\\bvp\\b"
+      - "\\bvice president\\b"
+      - "\\bcio\\b"
+      - "\\bcto\\b"
+      - "\\bchief\\b"
+      - "\\bsvp\\b"
+      - "\\bevp\\b"
+      - "\\bexecutive director\\b"
+  - resume: cloud
+    titles:
+      - "\\bcloud\\b"
+      - "\\bazure\\b"
+      - "\\binfrastructure\\b"
+      - "\\bdevops\\b"
+      - "\\bplatform\\b"
+  - resume: it_manager
+    default: true
 
 education:
   - school: ""

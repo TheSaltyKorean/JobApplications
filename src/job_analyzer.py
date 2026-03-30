@@ -10,6 +10,21 @@ import re
 from .resume_profile import SKILLS
 
 # ─────────────────────────────────────────────────────────
+# CONFIGURABLE RESUME ROUTING  (loaded from profile.yaml)
+# ─────────────────────────────────────────────────────────
+
+def _load_resume_routing() -> list:
+    """Load resume routing rules from profile.yaml. Returns list of rule dicts."""
+    try:
+        from .resume_profile import _get
+        routing = _get('resume_routing', [])
+        if routing:
+            return routing
+    except Exception:
+        pass
+    return []
+
+# ─────────────────────────────────────────────────────────
 # MANAGEMENT TITLE KEYWORDS  (include)
 # ─────────────────────────────────────────────────────────
 MANAGEMENT_TITLES = [
@@ -223,28 +238,53 @@ def count_skills_in_jd(desc_lower: str) -> int:
 def select_resume(title: str, company: str, description: str = '') -> str:
     """
     Returns the resume type key to use for this job.
-    Logic:
-      - Indian firm  → contract
-      - VP/CxO/Director+  → executive
-      - Cloud/Azure/Infra → cloud
-      - Everything else   → it_manager
+    Uses configurable routing from profile.yaml (resume_routing section).
+    Falls back to hardcoded defaults if no routing config is found.
     """
+    routing = _load_resume_routing()
     indian, _ = is_indian_firm(company, description)
+    title_lower = title.lower()
+    default_resume = 'it_manager'
+
+    if routing:
+        # Use configurable routing rules — order matters, first match wins
+        for rule in routing:
+            resume_key = rule.get('resume', '')
+
+            # Special match type: indian_firm
+            if rule.get('match') == 'indian_firm':
+                if indian:
+                    return resume_key
+                continue
+
+            # Default fallback rule
+            if rule.get('default'):
+                default_resume = resume_key
+                continue
+
+            # Title pattern matching
+            patterns = rule.get('titles', [])
+            for pattern in patterns:
+                try:
+                    if re.search(pattern, title_lower, re.IGNORECASE):
+                        return resume_key
+                except re.error:
+                    continue
+
+        return default_resume
+
+    # ── Hardcoded fallback (no resume_routing in profile.yaml) ──
     if indian:
         return 'contract'
 
-    title_lower = title.lower()
-
-    # VP / Executive level
     exec_patterns = [
-        r'\bvp\b', r'\bvice president\b', r'\"cio\b', r'\bcto\b',
+        r'\bvp\b', r'\bvice president\b', r'\bcio\b', r'\bcto\b',
         r'\bchief\b', r'\bsvp\b', r'\bevp\b', r'\bexecutive director\b',
     ]
     for p in exec_patterns:
         if re.search(p, title_lower):
             return 'executive'
 
-    # Cloud / Infrastructure
     cloud_patterns = [
         r'\bcloud\b', r'\bazure\b', r'\binfrastructure\b', r'\bdevops\b',
         r'\bplatform\b', r'\bsite reliability\b', r'\bsre\b',

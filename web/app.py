@@ -380,11 +380,18 @@ def settings():
     for k, v in raw_creds.items():
         ats_passwords[k] = v.get('password', '')
 
+    # Resume routing for display
+    from src.resume_profile import RESUMES, _get as profile_get
+    resume_files = RESUMES or {}
+    resume_routing = profile_get('resume_routing', [])
+
     return render_template('settings.html', settings=current,
                            claude_status=claude_status, email_presets=email_presets,
                            ats_credentials=ats_creds,
                            generated_accounts=generated_accounts,
-                           ats_passwords=ats_passwords)
+                           ats_passwords=ats_passwords,
+                           resume_files=resume_files,
+                           resume_routing=resume_routing)
 
 
 # ─────────────────────────────────────────────────────────
@@ -455,6 +462,28 @@ def api_run_queue():
 
     threading.Thread(target=run_all, daemon=True).start()
     return jsonify({'message': f"Processing {len(queued)} queued applications..."})
+
+
+@app.route('/api/resume-routing', methods=['POST'])
+def api_resume_routing():
+    """Update resume routing rules in profile.yaml."""
+    import yaml
+    data = request.get_json()
+    routing = data.get('routing', [])
+
+    profile_path = APP_ROOT / 'config' / 'profile.yaml'
+    if not profile_path.exists():
+        return jsonify({'ok': False, 'error': 'profile.yaml not found'})
+
+    with open(profile_path, 'r', encoding='utf-8') as f:
+        profile = yaml.safe_load(f) or {}
+
+    profile['resume_routing'] = routing
+
+    with open(profile_path, 'w', encoding='utf-8') as f:
+        yaml.dump(profile, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+    return jsonify({'ok': True})
 
 
 @app.route('/api/notifications')

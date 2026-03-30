@@ -22,10 +22,31 @@ APP_ROOT = Path(__file__).parent.parent
 
 
 def _resume_path(resume_type: str) -> str:
-    rel = RESUMES.get(resume_type, RESUMES['it_manager'])
+    """Resolve a resume type key to an absolute file path."""
+    if not RESUMES:
+        raise FileNotFoundError(
+            "No resumes configured. Add resume paths to config/profile.yaml under 'resumes'."
+        )
+
+    # Get the requested resume, fall back to first available
+    rel = RESUMES.get(resume_type)
+    if not rel:
+        # Try any available resume as fallback
+        fallback_key = next(iter(RESUMES), None)
+        if fallback_key:
+            rel = RESUMES[fallback_key]
+            logger.warning(f"Resume type '{resume_type}' not found, using '{fallback_key}' instead")
+        else:
+            raise FileNotFoundError(
+                f"Resume type '{resume_type}' not configured in profile.yaml"
+            )
+
     full = APP_ROOT / rel
     if not full.exists():
-        raise FileNotFoundError(f"Resume not found: {full}")
+        raise FileNotFoundError(
+            f"Resume file not found: {full}\n"
+            f"Make sure the file exists and the path in profile.yaml is correct."
+        )
     return str(full)
 
 

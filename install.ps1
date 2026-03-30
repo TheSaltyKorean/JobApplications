@@ -70,25 +70,13 @@ New-Item -ItemType Directory -Path "resumes" -Force | Out-Null
 New-Item -ItemType Directory -Path "data" -Force | Out-Null
 New-Item -ItemType Directory -Path "logs" -Force | Out-Null
 
-# Copy resumes reminder
-Write-Host ""
-Write-Host "============================================" -ForegroundColor Yellow
-Write-Host "IMPORTANT: Copy your resume PDFs to the" -ForegroundColor Yellow
-Write-Host "'resumes' folder with these exact names:" -ForegroundColor Yellow
-Write-Host ""
-Write-Host "  resumes\2025 Randy Walker - IT Executive.pdf"
-Write-Host "  resumes\2025 Randy Walker - Tech Leader.pdf"
-Write-Host "  resumes\2025 Randy Walker - Cloud.pdf"
-Write-Host "  resumes\2025 Randy Walker - Cloud Contract.pdf"
-Write-Host "============================================" -ForegroundColor Yellow
-
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Green
 Write-Host "Setup complete!" -ForegroundColor Green
 Write-Host ""
 Write-Host "Next steps:"
-Write-Host "1. Copy your 4 PDF resumes to the 'resumes' folder"
-Write-Host "2. Run '.\start.ps1' to start the app"
-Write-Host "3. Open Settings and configure your email + LinkedIn cookie"
+Write-Host "1. Run '.\start.ps1' to start the app"
+Write-Host "2. Go to Settings > Resumes & Routing to upload your PDF resumes"
+Write-Host "3. Configure your email + LinkedIn cookie in Settings"
 Write-Host "============================================" -ForegroundColor Green
 Read-Host "Press Enter to exit"

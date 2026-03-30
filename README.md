@@ -82,24 +82,26 @@ The profile file is gitignored so your personal data never gets committed.
 
 ### 2. Add Your Resumes
 
-Place your resume PDFs in the `resumes/` directory. The filenames must match what you put in `config/profile.yaml`:
+Go to **Settings** in the web dashboard and scroll to **Resumes & Routing**. Upload your PDF resumes directly through the UI and assign a key name to each (e.g. `executive`, `cloud`, `contract`, `it_manager`). You can also rename or delete resumes from there.
 
-```
-resumes/
-  Your Name - Tech Leader.pdf
-  Your Name - Cloud.pdf
-  Your Name - IT Executive.pdf
-  Your Name - Cloud Contract.pdf
+Alternatively, place PDFs manually in the `resumes/` directory and map them in `config/profile.yaml`:
+
+```yaml
+resumes:
+  executive: "resumes/Your Name - Executive.pdf"
+  cloud: "resumes/Your Name - Cloud.pdf"
+  contract: "resumes/Your Name - Contract.pdf"
+  it_manager: "resumes/Your Name - IT Manager.pdf"
 ```
 
-The bot picks which resume to use based on the job:
+The bot picks which resume to use based on configurable routing rules (also editable in Settings):
 
 | Job Type | Resume Used |
 |---|---|
 | VP / CxO / SVP / Executive titles | Executive resume |
 | Cloud / Azure / Infrastructure / DevOps titles | Cloud resume |
 | Indian IT staffing firm (auto-detected) | Contract resume (with screening contact info) |
-| All other management roles | Tech Leader / IT Manager resume |
+| All other management roles | IT Manager resume (default) |
 
 ### 3. Start the App
 

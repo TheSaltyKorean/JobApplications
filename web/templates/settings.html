@@ -9,9 +9,9 @@
 <!-- Claude Status -->
 <div class="status-banner {% if claude_status.available %}banner-green{% else %}banner-yellow{% endif %}" style="margin-bottom: 20px;">
   {% if claude_status.available %}
-    ✅ <strong>Claude CLI detected</strong> ({{ claude_status.version }}) – Q&A is fully automated
+    &#x2705; <strong>Claude CLI detected</strong> ({{ claude_status.version }}) – Q&A is fully automated
   {% else %}
-    ⚠️ <strong>Claude CLI not found</strong> –
+    &#x26A0;&#xFE0F; <strong>Claude CLI not found</strong> –
     <a href="https://docs.anthropic.com/en/docs/claude-code" target="_blank">Install Claude Code</a>
     for full Q&A automation, or enter an Anthropic API key below.
   {% endif %}
@@ -48,7 +48,7 @@
                  {% if settings.get('auto_apply') == 'true' %}checked{% endif %}>
           Auto-apply to all matching jobs (no review)
         </label>
-        <small>⚠️ Use carefully! Enables fully automatic applications without review.</small>
+        <small>&#x26A0;&#xFE0F; Use carefully! Enables fully automatic applications without review.</small>
       </div>
     </div>
 
@@ -157,7 +157,7 @@
   </div><!-- /settings-grid -->
 
   <div style="margin-top: 20px;">
-    <button type="submit" class="btn btn-primary btn-lg">💾 Save Settings</button>
+    <button type="submit" class="btn btn-primary btn-lg">&#x1F4BE; Save Settings</button>
   </div>
 </form>
 

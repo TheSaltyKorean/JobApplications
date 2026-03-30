@@ -5,9 +5,9 @@
 <div class="page-header">
   <h1>Jobs</h1>
   <div class="header-actions">
-    <a href="{{ url_for('search') }}" class="btn btn-primary">🔍 New Search</a>
+    <a href="{{ url_for('search') }}" class="btn btn-primary">&#x1F50D; New Search</a>
     <a href="{{ url_for('add_url') }}" class="btn btn-secondary">+ Add URL</a>
-    <button class="btn btn-success" onclick="runQueue()">▶ Apply Queue ({{ stats.queued }})</button>
+    <button class="btn btn-success" onclick="runQueue()">&#x25B6; Apply Queue ({{ stats.queued }})</button>
   </div>
 </div>
 
@@ -42,7 +42,7 @@
           <td>
             <a href="{{ url_for('job_detail', job_id=job.id) }}">{{ job.title }}</a>
             {% if job.is_indian_firm %}
-              <span class="badge badge-orange" title="{{ job.flagged_reason }}">🇮🇳</span>
+              <span class="badge badge-orange" title="{{ job.flagged_reason }}">&#x1F1EE;&#x1F1F3;</span>
             {% endif %}
           </td>
           <td>{{ job.company }}</td>

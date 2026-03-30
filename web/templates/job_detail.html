@@ -13,7 +13,7 @@
       <a href="{{ job.url }}" target="_blank" class="btn btn-secondary">View Original ↗</a>
     {% endif %}
     {% if job.status in ('new', 'failed', 'queued') %}
-      <button class="btn btn-success" onclick="applyNow({{ job.id }})">▶ Apply Now</button>
+      <button class="btn btn-success" onclick="applyNow({{ job.id }})">&#x25B6; Apply Now</button>
     {% endif %}
     {% if job.status == 'new' %}
       <form method="POST" action="{{ url_for('queue_job', job_id=job.id) }}" style="display:inline">
@@ -38,7 +38,7 @@
             </span></td></tr>
         <tr><td>Resume to Use</td><td><span class="badge badge-resume">{{ job.resume_type }}</span></td></tr>
         {% if job.is_indian_firm %}
-        <tr><td>⚠️ Flag</td><td><span class="badge badge-orange">Indian IT Firm – Screening Resume Used</span><br><small>{{ job.flagged_reason }}</small></td></tr>
+        <tr><td>&#x26A0;&#xFE0F; Flag</td><td><span class="badge badge-orange">Indian IT Firm – Screening Resume Used</span><br><small>{{ job.flagged_reason }}</small></td></tr>
         {% endif %}
         <tr><td>Salary</td><td>{{ job.salary or 'Not listed' }}</td></tr>
         <tr><td>Posted</td><td>{{ job.posted_date or 'Unknown' }}</td></tr>

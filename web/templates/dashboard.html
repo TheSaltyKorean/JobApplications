@@ -5,8 +5,8 @@
 <div class="page-header">
   <h1>Dashboard</h1>
   <div class="header-actions">
-    <a href="{{ url_for('search') }}" class="btn btn-primary">🔍 Search Jobs</a>
-    <button class="btn btn-success" onclick="runQueue()">▶ Apply to Queue</button>
+    <a href="{{ url_for('search') }}" class="btn btn-primary">&#x1F50D; Search Jobs</a>
+    <button class="btn btn-success" onclick="runQueue()">&#x25B6; Apply to Queue</button>
   </div>
 </div>
 
@@ -41,10 +41,10 @@
 <!-- Claude Status Banner -->
 <div class="status-banner {% if claude_status.available %}banner-green{% else %}banner-yellow{% endif %}">
   {% if claude_status.available %}
-    ✅ <strong>Claude CLI detected</strong> – Q&A is fully automated
+    &#x2705; <strong>Claude CLI detected</strong> – Q&A is fully automated
     <span class="badge">{{ claude_status.version }}</span>
   {% else %}
-    ⚠️ <strong>Claude CLI not found</strong> – Using clipboard + Claude.ai mode.
+    &#x26A0;&#xFE0F; <strong>Claude CLI not found</strong> – Using clipboard + Claude.ai mode.
     <a href="https://docs.anthropic.com/en/docs/claude-code" target="_blank">Install Claude Code</a>
     for full automation.
   {% endif %}
@@ -67,7 +67,7 @@
             <td><a href="{{ url_for('job_detail', job_id=job.id) }}">{{ job.title }}</a></td>
             <td>
               {{ job.company }}
-              {% if job.is_indian_firm %}<span class="badge badge-orange">🇮🇳 Screening</span>{% endif %}
+              {% if job.is_indian_firm %}<span class="badge badge-orange">&#x1F1EE;&#x1F1F3; Screening</span>{% endif %}
             </td>
             <td><span class="match-badge {% if job.match_score >= 70 %}match-high{% elif job.match_score >= 50 %}match-med{% else %}match-low{% endif %}">{{ job.match_score|int }}%</span></td>
             <td>

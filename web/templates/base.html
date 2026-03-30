@@ -9,7 +9,7 @@
 <body>
   <nav class="navbar">
     <div class="nav-brand">
-      <span class="bot-icon">🤖</span>
+      <span class="bot-icon">&#x1F916;</span>
       <span>JobBot</span>
       <span class="nav-subtitle">Randy Walker</span>
     </div>
@@ -19,7 +19,7 @@
       <a href="{{ url_for('search') }}" class="nav-link {% if request.endpoint=='search' %}active{% endif %}">Search</a>
       <a href="{{ url_for('add_url') }}" class="nav-link {% if request.endpoint=='add_url' %}active{% endif %}">Add URL</a>
       <a href="{{ url_for('answer') }}" class="nav-link {% if request.endpoint=='answer' %}active{% endif %}">Answer</a>
-      <a href="{{ url_for('settings') }}" class="nav-link {% if request.endpoint=='settings' %}active{% endif %}">⚙ Settings</a>
+      <a href="{{ url_for('settings') }}" class="nav-link {% if request.endpoint=='settings' %}active{% endif %}">&#x2699; Settings</a>
     </div>
   </nav>
 

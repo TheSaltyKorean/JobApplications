@@ -42,7 +42,7 @@
       </thead>
       <tbody>
         {% for job in jobs %}
-        <tr class="{% if job.is_indian_firm %}row-orange{% endif %}">
+        <tr id="row-{{ job.id }}" class="{% if job.is_indian_firm %}row-orange{% endif %}">
           <td>
             <a href="{{ url_for('job_detail', job_id=job.id) }}">{{ job.title }}</a>
             {% if job.is_indian_firm %}
@@ -65,10 +65,10 @@
                 <button class="btn-sm btn-green">Queue</button>
               </form>
               <button class="btn-sm btn-blue" onclick="applyNow({{ job.id }})">Apply Now</button>
-              <button class="btn-sm btn-red" onclick="dismissJob({{ job.id }})">Dismiss</button>
+              <button class="btn-sm btn-red" onclick="dismiss({{ job.id }})">Dismiss</button>
             {% elif job.status == 'queued' %}
               <button class="btn-sm btn-blue" onclick="applyNow({{ job.id }})">Apply Now</button>
-              <button class="btn-sm btn-red" onclick="dismissJob({{ job.id }})">Dismiss</button>
+              <button class="btn-sm btn-red" onclick="dismiss({{ job.id }})">Dismiss</button>
             {% elif job.status == 'applied' %}
               <button class="btn-sm btn-green" onclick="updateStatus({{ job.id }}, 'interview')">Got Interview</button>
               <button class="btn-sm btn-red" onclick="updateStatus({{ job.id }}, 'rejected')">Rejected</button>
@@ -76,6 +76,8 @@
             {% elif job.status == 'interview' %}
               <button class="btn-sm btn-green" onclick="updateStatus({{ job.id }}, 'offer')">Got Offer!</button>
               <button class="btn-sm btn-red" onclick="updateStatus({{ job.id }}, 'rejected')">Rejected</button>
+            {% elif job.status == 'skipped' %}
+              <button class="btn-sm btn-green" onclick="restore({{ job.id }})">Restore</button>
             {% endif %}
             {% if job.url %}
               <a href="{{ job.url }}" target="_blank" class="btn-sm btn-gray">View &#x2197;</a>
@@ -108,40 +110,10 @@
   {% endif %}
 </div>
 
-<!-- Dismiss Modal -->
-<div id="dismiss-modal" class="modal" style="display:none">
-  <div class="modal-content">
-    <h3>Dismiss Job</h3>
-    <p>Why are you dismissing this job?</p>
-    <div class="form-group">
-      <select id="dismiss-reason" class="form-control">
-        <option value="Not relevant to my background">Not relevant to my background</option>
-        <option value="Wrong seniority level">Wrong seniority level</option>
-        <option value="Bad location">Bad location</option>
-        <option value="Low pay">Low pay</option>
-        <option value="Indian staffing firm">Indian staffing firm</option>
-        <option value="Already applied elsewhere">Already applied elsewhere</option>
-        <option value="Company not interested">Company not interested</option>
-        <option value="">Other (no reason)</option>
-      </select>
-    </div>
-    <div style="margin-top:12px">
-      <button class="btn btn-red" onclick="confirmDismiss()">Dismiss</button>
-      <button class="btn btn-secondary" onclick="closeDismissModal()">Cancel</button>
-    </div>
-  </div>
-</div>
-
 {% endblock %}
 
 {% block scripts %}
-<style>
-.modal { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:1000; }
-.modal-content { background:white; border-radius:8px; padding:24px; max-width:400px; width:90%; box-shadow:0 4px 20px rgba(0,0,0,0.3); }
-</style>
 <script>
-let dismissJobId = null;
-
 function applyNow(id) {
   if (!confirm('Apply to this job now? A browser window will open.')) return;
   fetch(`/jobs/${id}/apply`, {method: 'POST'})
@@ -149,24 +121,23 @@ function applyNow(id) {
     .then(d => { alert(d.message || d.error); setTimeout(() => location.reload(), 2000); });
 }
 
-function dismissJob(id) {
-  dismissJobId = id;
-  document.getElementById('dismiss-modal').style.display = 'flex';
-}
-
-function closeDismissModal() {
-  document.getElementById('dismiss-modal').style.display = 'none';
-  dismissJobId = null;
-}
-
-function confirmDismiss() {
-  if (!dismissJobId) return;
-  const reason = document.getElementById('dismiss-reason').value;
-  fetch(`/api/job/${dismissJobId}/status`, {
+function dismiss(id) {
+  // Instant dismiss — fade the row out, no confirmation needed
+  const row = document.getElementById('row-' + id);
+  if (row) row.style.opacity = '0.3';
+  fetch(`/api/job/${id}/status`, {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({status: 'skipped', notes: reason})
-  }).then(() => { closeDismissModal(); location.reload(); });
+    body: JSON.stringify({status: 'skipped', notes: 'Manually dismissed'})
+  }).then(() => { if (row) row.remove(); });
+}
+
+function restore(id) {
+  fetch(`/api/job/${id}/status`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({status: 'new'})
+  }).then(() => location.reload());
 }
 
 function updateStatus(id, status) {

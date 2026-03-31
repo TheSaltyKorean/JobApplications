@@ -133,8 +133,11 @@ async def search_linkedin(keywords: list, location: str,
         page = await context.new_page()
         auth_checked = False
 
+        consecutive_failures = 0
+        max_consecutive_failures = 3  # Give up after 3 blocked keywords in a row
+
         try:
-            for keyword in keywords:
+            for idx, keyword in enumerate(keywords):
                 encoded_query = quote_plus(keyword)
                 encoded_location = quote_plus(location)
                 url = (
@@ -144,26 +147,46 @@ async def search_linkedin(keywords: list, location: str,
                     f"&f_JT=F&f_TPR=r604800&sortBy=DD&position=1&pageNum=0"
                 )
 
-                logger.info(f"Searching LinkedIn: '{keyword}' in '{location}'")
+                logger.info(f"Searching LinkedIn ({idx+1}/{len(keywords)}): '{keyword}' in '{location}'")
                 try:
                     await page.goto(url, wait_until='domcontentloaded', timeout=30000)
+                    consecutive_failures = 0  # Reset on success
                 except Exception as nav_err:
                     err_str = str(nav_err)
                     if 'ERR_TOO_MANY_REDIRECTS' in err_str or 'ERR_HTTP_RESPONSE_CODE_FAILURE' in err_str:
-                        # Rate-limited or cookie issue — stop trying more keywords
-                        # but keep whatever jobs we already found
-                        logger.warning(
-                            f"LinkedIn blocked '{keyword}' ({err_str[:60]}...). "
-                            f"Stopping search — keeping {len(all_jobs)} jobs found so far."
-                        )
-                        if not all_jobs:
-                            # First keyword failed — likely a cookie issue
+                        consecutive_failures += 1
+                        remaining = len(keywords) - idx - 1
+
+                        if not all_jobs and idx == 0:
+                            # Very first keyword failed — likely a cookie issue
+                            logger.error(
+                                "LinkedIn blocked first keyword — cookie may be expired. "
+                                "Update your li_at cookie in Settings."
+                            )
                             from . import notifier
                             notifier.notify_config_warning(
                                 "LinkedIn Cookie Expired",
                                 "Your LinkedIn session cookie may be invalid. Update it in Settings."
                             )
-                        break  # Stop searching but return what we have
+                            break
+
+                        if consecutive_failures >= max_consecutive_failures:
+                            logger.warning(
+                                f"LinkedIn blocked {consecutive_failures} keywords in a row. "
+                                f"Stopping — keeping {len(all_jobs)} jobs found so far. "
+                                f"({remaining} keywords remaining)"
+                            )
+                            break
+
+                        # Back off and try next keyword
+                        backoff = random.uniform(10, 20) * consecutive_failures
+                        logger.warning(
+                            f"LinkedIn blocked '{keyword}' (attempt {consecutive_failures}/{max_consecutive_failures}). "
+                            f"Backing off {backoff:.0f}s then trying next keyword... "
+                            f"({remaining} keywords remaining)"
+                        )
+                        await asyncio.sleep(backoff)
+                        continue
                     raise
 
                 await asyncio.sleep(random.uniform(3, 5))
@@ -183,7 +206,7 @@ async def search_linkedin(keywords: list, location: str,
                                 break
                         if not logged_in:
                             logger.error("Login timeout - no login detected after 90s")
-                            break  # Return whatever we have (likely empty)
+                            break
                     auth_checked = True
 
                 logger.info(f"Landed on: {page.url}")
@@ -210,8 +233,8 @@ async def search_linkedin(keywords: list, location: str,
                 logger.info(f"  LinkedIn '{keyword}': {len(keyword_jobs)} jobs ({len(all_jobs)} total unique)")
 
                 # Delay between keywords to avoid rate limiting
-                if keyword != keywords[-1]:
-                    delay = random.uniform(4, 8)
+                if idx < len(keywords) - 1:
+                    delay = random.uniform(8, 15)
                     logger.info(f"  Waiting {delay:.1f}s before next keyword...")
                     await asyncio.sleep(delay)
 

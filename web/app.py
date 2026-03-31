@@ -233,7 +233,7 @@ def search():
             ])
 
         def run_search():
-            from src.job_searcher import search_linkedin, search_indeed
+            from src.job_searcher import search_linkedin, open_indeed_search
             all_jobs = []
             seen_urls = set()
 
@@ -255,19 +255,13 @@ def search():
                 except Exception as e:
                     logger.error(f"  LinkedIn search failed: {e}")
 
-            # Indeed: search each keyword individually
+            # Indeed: open search in real browser (can't automate — Cloudflare)
             if 'indeed' in platforms:
-                for keyword in keywords:
-                    try:
-                        logger.info(f"Searching Indeed for: {keyword}")
-                        indeed_jobs = _run_async(search_indeed([keyword], location))
-                        for job in indeed_jobs:
-                            if job['url'] not in seen_urls:
-                                seen_urls.add(job['url'])
-                                all_jobs.append(job)
-                        logger.info(f"  Indeed '{keyword}': {len(indeed_jobs)} jobs")
-                    except Exception as e:
-                        logger.error(f"  Indeed '{keyword}' failed: {e}")
+                try:
+                    urls = open_indeed_search(keywords, location)
+                    logger.info(f"  Indeed: opened {len(urls)} search pages in browser")
+                except Exception as e:
+                    logger.error(f"  Indeed search open failed: {e}")
 
             logger.info(f"Total unique jobs found: {len(all_jobs)}")
 
@@ -286,9 +280,6 @@ def search():
                                 job_data['url'],
                                 settings.get('linkedin_session_cookie', '')
                             ))
-                        elif job_data['platform'] == 'indeed':
-                            from src.job_searcher import fetch_indeed_description
-                            description = _run_async(fetch_indeed_description(job_data['url']))
                         job_data['description'] = description
                         desc_fetch_count += 1
                         # Delay between fetches to avoid rate limiting
@@ -309,7 +300,12 @@ def search():
                 notifier.notify_jobs_found(new_count, ', '.join(platforms))
 
         threading.Thread(target=run_search, daemon=True).start()
-        flash(f"Search started for: {', '.join(keywords[:3])}... Results will appear in the jobs list.", 'success')
+        msg = f"Search started for: {', '.join(keywords[:3])}..."
+        if 'linkedin' in platforms:
+            msg += " LinkedIn results will appear in the jobs list."
+        if 'indeed' in platforms:
+            msg += " Indeed searches opened in your browser — use Add URL to import jobs."
+        flash(msg, 'success')
         return redirect(url_for('jobs'))
 
     default_keywords = settings.get('default_keywords', [

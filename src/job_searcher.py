@@ -178,8 +178,8 @@ async def search_linkedin(keywords: list, location: str,
                             )
                             break
 
-                        # Back off and try next keyword
-                        backoff = random.uniform(10, 20) * consecutive_failures
+                        # Back off longer and try next keyword
+                        backoff = random.uniform(30, 60) * consecutive_failures
                         logger.warning(
                             f"LinkedIn blocked '{keyword}' (attempt {consecutive_failures}/{max_consecutive_failures}). "
                             f"Backing off {backoff:.0f}s then trying next keyword... "
@@ -233,9 +233,16 @@ async def search_linkedin(keywords: list, location: str,
                 logger.info(f"  LinkedIn '{keyword}': {len(keyword_jobs)} jobs ({len(all_jobs)} total unique)")
 
                 # Delay between keywords to avoid rate limiting
+                # LinkedIn aggressively rate-limits rapid search page navigation
                 if idx < len(keywords) - 1:
-                    delay = random.uniform(8, 15)
-                    logger.info(f"  Waiting {delay:.1f}s before next keyword...")
+                    delay = random.uniform(30, 50)
+                    logger.info(f"  Waiting {delay:.0f}s before next keyword...")
+                    # Visit LinkedIn feed briefly to look like normal browsing
+                    try:
+                        await page.goto('https://www.linkedin.com/feed/', wait_until='domcontentloaded', timeout=15000)
+                        await asyncio.sleep(random.uniform(3, 6))
+                    except:
+                        pass
                     await asyncio.sleep(delay)
 
         except Exception as e:
@@ -425,169 +432,35 @@ async def fetch_linkedin_description(url: str, li_session_cookie: str = None) ->
 
 
 # ─────────────────────────────────────────────────────────
-# INDEED SEARCHER (HTTP-based, no Playwright — Cloudflare blocks it)
+# INDEED — opens in real browser (Cloudflare blocks all automation)
 # ─────────────────────────────────────────────────────────
 
-async def search_indeed(keywords: list, location: str, max_results: int = 25) -> list:
+def open_indeed_search(keywords: list, location: str) -> list:
     """
-    Search Indeed using HTTP requests (not Playwright).
-    Cloudflare blocks automated browsers on Indeed, so we use requests
-    with a real User-Agent to fetch the public search results page.
+    Open Indeed search URLs in the user's real browser.
+    Indeed blocks both Playwright (Cloudflare captcha) and HTTP requests (401),
+    so we can't scrape it. Instead, open the search results for the user
+    to browse and add jobs manually via the Add URL feature.
+    Returns list of URLs opened.
     """
-    import requests
-    from html.parser import HTMLParser
+    import webbrowser
+    from urllib.parse import quote_plus
 
-    jobs = []
-    query = ' '.join(keywords)
-
-    url = (
-        f"https://www.indeed.com/jobs"
-        f"?q={query.replace(' ', '+')}"
-        f"&l={location.replace(' ', '+').replace(',', '%2C')}"
-        f"&fromage=7"
-        f"&sort=date"
-        f"&sc=0kf%3Ajt%28fulltime%29%3B"
-    )
-
-    headers = {
-        'User-Agent': (
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-            'AppleWebKit/537.36 (KHTML, like Gecko) '
-            'Chrome/123.0.0.0 Safari/537.36'
-        ),
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-    }
-
-    try:
-        logger.info(f"Searching Indeed (HTTP): {query} in {location}")
-        resp = requests.get(url, headers=headers, timeout=15)
-        resp.raise_for_status()
-        html = resp.text
-
-        # Parse job cards from HTML using regex (Indeed embeds structured data)
-        # Look for job keys (jk= parameter) and associated metadata
-        # Indeed puts job data in mosaic-provider-jobcards model or inline HTML
-
-        # Strategy 1: Extract from data attributes and structured HTML
-        jk_pattern = re.compile(r'data-jk="([a-f0-9]+)"')
-        title_pattern = re.compile(r'<h2[^>]*class="[^"]*jobTitle[^"]*"[^>]*>.*?<span[^>]*>([^<]+)</span>', re.DOTALL)
-        company_pattern = re.compile(r'data-testid="company-name"[^>]*>([^<]+)<', re.DOTALL)
-
-        # Find all job keys
-        jk_matches = jk_pattern.findall(html)
-        seen_jks = set()
-
-        for jk in jk_matches:
-            if jk in seen_jks:
-                continue
-            seen_jks.add(jk)
-
-            full_url = f'https://www.indeed.com/viewjob?jk={jk}'
-            jobs.append({
-                'job_id': f'indeed_{jk}',
-                'title': '',  # Will be filled by description fetch or left for manual review
-                'company': '',
-                'location': location,
-                'platform': 'indeed',
-                'url': full_url,
-                'description': '',
-                'posted_date': '',
-                'salary': '',
-                'job_type': 'Full-time',
-            })
-
-            if len(jobs) >= max_results:
-                break
-
-        # Try to extract titles/companies from the HTML around each jk
-        for job in jobs:
-            jk = job['job_id'].replace('indeed_', '')
-            # Find the block containing this job key and extract title
-            block_pattern = re.compile(
-                rf'data-jk="{jk}".*?<h2[^>]*>.*?<span[^>]*>([^<]+)</span>.*?'
-                rf'(?:data-testid="company-name"[^>]*>([^<]+)<)?',
-                re.DOTALL
-            )
-            match = block_pattern.search(html)
-            if match:
-                job['title'] = match.group(1).strip() if match.group(1) else ''
-                job['company'] = match.group(2).strip() if match.group(2) else ''
-
-            if not job['title']:
-                # Try reverse order: title before jk
-                rev_pattern = re.compile(
-                    rf'<span[^>]*title="([^"]+)"[^>]*>.*?data-jk="{jk}"',
-                    re.DOTALL
-                )
-                rev_match = rev_pattern.search(html)
-                if rev_match:
-                    job['title'] = rev_match.group(1).strip()
-
-        # Filter out jobs without titles
-        jobs = [j for j in jobs if j['title']]
-
-        if not jobs and jk_matches:
-            # We found job keys but couldn't parse titles — keep them with placeholder
-            for jk in list(seen_jks)[:max_results]:
-                jobs.append({
-                    'job_id': f'indeed_{jk}',
-                    'title': '(Indeed job — open to view)',
-                    'company': '',
-                    'location': location,
-                    'platform': 'indeed',
-                    'url': f'https://www.indeed.com/viewjob?jk={jk}',
-                    'description': '',
-                    'posted_date': '',
-                    'salary': '',
-                    'job_type': 'Full-time',
-                })
-
-        logger.info(f"Indeed HTTP search found {len(jobs)} jobs (from {len(seen_jks)} job keys)")
-
-    except requests.exceptions.HTTPError as e:
-        if resp.status_code == 403:
-            logger.warning("Indeed returned 403 (Cloudflare blocked). Search results unavailable via HTTP.")
-        else:
-            logger.error(f"Indeed search HTTP error: {e}")
-    except Exception as e:
-        logger.error(f"Indeed search error: {e}", exc_info=True)
-
-    return jobs
-
-
-async def fetch_indeed_description(url: str) -> str:
-    """Fetch full job description from Indeed using HTTP requests."""
-    import requests
-
-    headers = {
-        'User-Agent': (
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-            'AppleWebKit/537.36 (KHTML, like Gecko) '
-            'Chrome/123.0.0.0 Safari/537.36'
-        ),
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    }
-
-    try:
-        resp = requests.get(url, headers=headers, timeout=15)
-        resp.raise_for_status()
-        html = resp.text
-        # Extract description text from the job description div
-        desc_match = re.search(
-            r'<div[^>]*id="jobDescriptionText"[^>]*>(.*?)</div>',
-            html, re.DOTALL
+    urls_opened = []
+    for keyword in keywords:
+        url = (
+            f"https://www.indeed.com/jobs"
+            f"?q={quote_plus(keyword)}"
+            f"&l={quote_plus(location)}"
+            f"&fromage=7"
+            f"&sort=date"
+            f"&sc=0kf%3Ajt%28fulltime%29%3B"
         )
-        if desc_match:
-            # Strip HTML tags for plain text
-            desc_html = desc_match.group(1)
-            desc_text = re.sub(r'<[^>]+>', ' ', desc_html)
-            desc_text = re.sub(r'\s+', ' ', desc_text).strip()
-            return desc_text
-        return ''
-    except Exception as e:
-        logger.debug(f"Could not fetch Indeed description: {e}")
-        return ''
+        webbrowser.open(url)
+        urls_opened.append(url)
+        logger.info(f"Opened Indeed search in browser: {keyword}")
+
+    return urls_opened
 
 
 # ─────────────────────────────────────────────────────────

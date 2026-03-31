@@ -237,6 +237,8 @@ def search():
             all_jobs = []
             seen_urls = set()
 
+            logger.info(f"Selected platforms: {platforms}, keywords: {len(keywords)}")
+
             # LinkedIn: single browser session handles all keywords internally
             if 'linkedin' in platforms:
                 try:
@@ -295,8 +297,13 @@ def search():
                     except Exception as e:
                         logger.error(f"Failed to fetch description for {job_data['url']}: {e}")
 
+            # Count duplicates before processing
+            dup_count = sum(1 for j in all_jobs if db.is_duplicate(j.get('url', '')))
             new_count = process_job_batch(all_jobs)
-            logger.info(f"Search complete: {len(all_jobs)} total, {new_count} new qualifying jobs")
+            logger.info(
+                f"Search complete: {len(all_jobs)} total, {dup_count} duplicates, "
+                f"{new_count} new qualifying jobs"
+            )
 
             if new_count > 0:
                 notifier.notify_jobs_found(new_count, ', '.join(platforms))

@@ -261,6 +261,8 @@ def search():
             logger.info(f"Total unique jobs found: {len(all_jobs)}")
 
             # Fetch full descriptions for jobs that don't have them
+            import time as _time
+            desc_fetch_count = 0
             for job_data in all_jobs:
                 if db.is_duplicate(job_data.get('url', '')):
                     continue
@@ -277,6 +279,10 @@ def search():
                             from src.job_searcher import fetch_indeed_description
                             description = _run_async(fetch_indeed_description(job_data['url']))
                         job_data['description'] = description
+                        desc_fetch_count += 1
+                        # Delay between fetches to avoid rate limiting
+                        if desc_fetch_count < len(all_jobs):
+                            _time.sleep(2)
                     except Exception as e:
                         logger.error(f"Failed to fetch description for {job_data['url']}: {e}")
 

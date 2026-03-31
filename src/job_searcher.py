@@ -148,7 +148,8 @@ async def search_linkedin(keywords: list, location: str,
                 try:
                     await page.goto(url, wait_until='domcontentloaded', timeout=30000)
                 except Exception as nav_err:
-                    if 'ERR_TOO_MANY_REDIRECTS' in str(nav_err):
+                    err_str = str(nav_err)
+                    if 'ERR_TOO_MANY_REDIRECTS' in err_str:
                         logger.error(
                             "LinkedIn session cookie is expired or invalid (redirect loop). "
                             "Update your li_at cookie in Settings."
@@ -159,6 +160,13 @@ async def search_linkedin(keywords: list, location: str,
                             "Your LinkedIn session cookie is invalid. Update it in Settings."
                         )
                         return None
+                    if 'ERR_HTTP_RESPONSE_CODE_FAILURE' in err_str:
+                        logger.warning(
+                            f"LinkedIn returned HTTP error for '{keyword}' (likely rate-limited). "
+                            f"Skipping this keyword and waiting before next."
+                        )
+                        await asyncio.sleep(random.uniform(5, 10))
+                        continue
                     raise
 
                 await asyncio.sleep(random.uniform(3, 5))
@@ -202,8 +210,11 @@ async def search_linkedin(keywords: list, location: str,
 
                 logger.info(f"  LinkedIn '{keyword}': {len(keyword_jobs)} jobs ({len(all_jobs)} total unique)")
 
-                # Brief delay between keywords to avoid rate limiting
-                await asyncio.sleep(random.uniform(1, 3))
+                # Delay between keywords to avoid rate limiting
+                if keyword != keywords[-1]:
+                    delay = random.uniform(4, 8)
+                    logger.info(f"  Waiting {delay:.1f}s before next keyword...")
+                    await asyncio.sleep(delay)
 
         except Exception as e:
             logger.error(f"LinkedIn search error: {e}", exc_info=True)
@@ -381,7 +392,11 @@ async def fetch_linkedin_description(url: str, li_session_cookie: str = None) ->
             desc = await desc_el.inner_text() if desc_el else ''
             return desc.strip()
         except Exception as e:
-            logger.debug(f"Could not fetch LinkedIn description: {e}")
+            err_str = str(e)
+            if 'ERR_HTTP_RESPONSE_CODE_FAILURE' in err_str or 'ERR_TOO_MANY_REDIRECTS' in err_str:
+                logger.warning(f"LinkedIn rate-limited description fetch for {url}")
+            else:
+                logger.debug(f"Could not fetch LinkedIn description: {e}")
             return ''
         finally:
             await browser.close()
